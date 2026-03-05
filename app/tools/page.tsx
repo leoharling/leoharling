@@ -4,8 +4,8 @@ import {
   Rocket,
   Newspaper,
   Globe,
-  Shield,
   Plane,
+  Crosshair,
   ExternalLink,
 } from "lucide-react";
 import FadeIn from "@/components/ui/FadeIn";
@@ -55,13 +55,13 @@ const tools = [
     status: "Live" as const,
   },
   {
-    title: "Defence Procurement Tracker",
+    title: "Global Conflict Monitor",
     description:
-      "Aggregate and visualize public EU/NATO defence procurement data. Search by country, category, and value.",
-    icon: <Shield size={24} />,
-    href: "/tools/defence-procurement",
+      "Track active conflicts worldwide with real-time news, casualty data, front lines, and interactive maps.",
+    icon: <Crosshair size={24} />,
+    href: "/tools/conflict-monitor",
     external: false,
-    status: "Coming Soon" as const,
+    status: "Live" as const,
   },
 ];
 

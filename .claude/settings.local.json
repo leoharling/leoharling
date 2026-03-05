@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude:*)",
+      "Bash(npm view:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "WebSearch",
+      "Bash(curl:*)",
+      "mcp__ide__getDiagnostics"
+    ]
+  }
+}

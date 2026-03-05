@@ -57,7 +57,7 @@ export default function Home() {
             transition={{ duration: 0.8, delay: 0.3 }}
             className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center"
           >
-            <Button href="/tools">View My Work</Button>
+            <Button href="/tools">Explore My Tools</Button>
             <Button href="/contact" variant="secondary">
               Get in Touch
             </Button>

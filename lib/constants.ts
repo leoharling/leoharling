@@ -18,14 +18,12 @@ export const TOOLS_LINKS = [
   { href: "/tools/news-feed", label: "Orbit Intel", description: "Space, AI & defence news feed" },
   { href: "/tools/launch-tracker", label: "Launch Tracker", description: "Upcoming rocket launches" },
   { href: "/tools/satellite-visualizer", label: "Satellite Visualizer", description: "3D constellation explorer" },
-  { href: "/tools/defence-procurement", label: "Defence Procurement", description: "EU/NATO procurement data" },
+  { href: "/tools/conflict-monitor", label: "Conflict Monitor", description: "Global conflict tracking dashboard" },
 ];
 
 export const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
   { href: "/tools", label: "Tools", hasDropdown: true },
-  { href: "/blog", label: "Blog" },
-  { href: "/photography", label: "Photography" },
   { href: "/contact", label: "Contact" },
 ];
