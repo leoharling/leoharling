@@ -20,12 +20,11 @@ import type { FeatureCollection, Feature, Geometry } from "geojson";
 import type { Topology } from "topojson-specification";
 
 /* ── Load world country boundaries (50m resolution) ── */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const worldTopo = require("world-atlas/countries-50m.json");
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const worldTopo: any = require("world-atlas/countries-50m.json");
 const worldGeo = feature(
   worldTopo as Topology,
-  (worldTopo as Record<string, unknown>).objects
-    .countries as Topology["objects"][string]
+  worldTopo.objects.countries
 ) as unknown as FeatureCollection;
 
 function getCountryFeatures(codes: string[]): Feature<Geometry>[] {
