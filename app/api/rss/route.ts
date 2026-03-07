@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Parser from "rss-parser";
 import { RSS_FEEDS } from "@/lib/rss-feeds";
+import { detectHighlight, type Highlight } from "@/lib/news-highlights";
 
 export interface FeedItem {
   title: string;
@@ -9,6 +10,7 @@ export interface FeedItem {
   snippet: string;
   source: string;
   category: string;
+  highlight?: Highlight;
 }
 
 const parser = new Parser({
@@ -23,15 +25,23 @@ export async function GET() {
     const feedPromises = RSS_FEEDS.map(async (feedConfig) => {
       try {
         const feed = await parser.parseURL(feedConfig.url);
-        return (feed.items || []).slice(0, 5).map((item) => ({
-          title: item.title || "Untitled",
-          link: item.link || "#",
-          pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
-          snippet:
-            (item.contentSnippet || item.content || "").slice(0, 200) + "...",
-          source: feedConfig.name,
-          category: feedConfig.category,
-        }));
+        return (feed.items || []).slice(0, 5).map((item) => {
+          const title = item.title || "Untitled";
+          const raw = (item.contentSnippet || item.content || "").trim();
+          // Strip HN-style metadata-only snippets (Article URL, Comments URL, Points, etc.)
+          const isMetaOnly = /^Article URL:/.test(raw) || /^Comments URL:/.test(raw);
+          const snippet = isMetaOnly ? "" : raw.slice(0, 200) + "...";
+          const highlight = detectHighlight(title, snippet);
+          return {
+            title,
+            link: item.link || "#",
+            pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
+            snippet,
+            source: feedConfig.name,
+            category: feedConfig.category,
+            ...(highlight && { highlight }),
+          };
+        });
       } catch {
         console.warn(`Failed to fetch feed: ${feedConfig.name}`);
         return [];

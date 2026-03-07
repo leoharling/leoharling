@@ -1,104 +1,223 @@
 "use client";
 
-import { useRef, useMemo, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useRef, useMemo, useState, useCallback, useEffect } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
+import {
+  twoline2satrec,
+  propagate,
+  gstime,
+  eciToEcf,
+  eciToGeodetic,
+} from "satellite.js";
+import type { SatRec } from "satellite.js";
+import { mesh, feature } from "topojson-client";
+import type { Topology, GeometryCollection } from "topojson-specification";
 
-// Simplified TLE propagation - create orbital positions
-function generateOrbitPoints(
-  semiMajorAxis: number,
-  inclination: number,
-  raan: number,
-  numPoints: number = 128
-): THREE.Vector3[] {
-  const points: THREE.Vector3[] = [];
-  const incRad = (inclination * Math.PI) / 180;
-  const raanRad = (raan * Math.PI) / 180;
+// ── Constants ──────────────────────────────────────────────
+const EARTH_RADIUS = 2;
+const REAL_EARTH_KM = 6371;
+const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
+// Altitude exaggeration: sqrt-based so LEO is visible, MEO/GEO stays reasonable
+const ALT_SCALE = 0.06;
 
-  for (let i = 0; i <= numPoints; i++) {
-    const angle = (i / numPoints) * Math.PI * 2;
-    const x =
-      semiMajorAxis *
-      (Math.cos(raanRad) * Math.cos(angle) -
-        Math.sin(raanRad) * Math.sin(angle) * Math.cos(incRad));
-    const y = semiMajorAxis * Math.sin(angle) * Math.sin(incRad);
-    const z =
-      semiMajorAxis *
-      (Math.sin(raanRad) * Math.cos(angle) +
-        Math.cos(raanRad) * Math.sin(angle) * Math.cos(incRad));
-    points.push(new THREE.Vector3(x, y, z));
-  }
-  return points;
+// ── Types ──────────────────────────────────────────────────
+export interface TLEEntry {
+  name: string;
+  line1: string;
+  line2: string;
 }
 
-interface ConstellationConfig {
+export interface SatelliteGroup {
   name: string;
   color: string;
-  orbits: { sma: number; inc: number; raan: number }[];
-  satellitesPerOrbit: number;
+  tles: TLEEntry[];
 }
 
-const CONSTELLATIONS: ConstellationConfig[] = [
-  {
-    name: "Starlink",
-    color: "#60a5fa",
-    orbits: Array.from({ length: 6 }, (_, i) => ({
-      sma: 2.8,
-      inc: 53,
-      raan: i * 60,
-    })),
-    satellitesPerOrbit: 8,
-  },
-  {
-    name: "OneWeb",
-    color: "#34d399",
-    orbits: Array.from({ length: 4 }, (_, i) => ({
-      sma: 3.0,
-      inc: 87.9,
-      raan: i * 90,
-    })),
-    satellitesPerOrbit: 6,
-  },
-  {
-    name: "GPS",
-    color: "#fbbf24",
-    orbits: Array.from({ length: 6 }, (_, i) => ({
-      sma: 4.2,
-      inc: 55,
-      raan: i * 60,
-    })),
-    satellitesPerOrbit: 4,
-  },
-];
+export interface NotableSatelliteData extends TLEEntry {
+  id: string;
+  label: string;
+  description: string;
+  color: string;
+}
+
+export interface SatelliteInfo {
+  id: string;
+  label: string;
+  description: string;
+  color: string;
+  altitude: number;
+  speed: number;
+  latitude: number;
+  longitude: number;
+}
+
+interface SceneProps {
+  groups: SatelliteGroup[];
+  notable: NotableSatelliteData[];
+  visibleConstellations: Record<string, boolean>;
+  selectedId: string | null;
+  onSelect: (info: SatelliteInfo | null) => void;
+}
+
+// ── Helpers ────────────────────────────────────────────────
+// Convert ECEF km coordinates to scene coordinates with altitude exaggeration.
+// Earth surface maps to EARTH_RADIUS; altitude above surface uses sqrt scaling
+// so LEO orbits (~400-1200km) are clearly visible while GPS (~20200km) stays in frame.
+function ecfToVec3(ecf: { x: number; y: number; z: number }): THREE.Vector3 {
+  // Raw distance from Earth center in km
+  const distKm = Math.sqrt(ecf.x ** 2 + ecf.y ** 2 + ecf.z ** 2);
+  const altKm = Math.max(0, distKm - REAL_EARTH_KM);
+  // Scene distance: Earth radius + sqrt-exaggerated altitude
+  const sceneDist = EARTH_RADIUS + Math.sqrt(altKm) * ALT_SCALE;
+  // Direction vector (ECEF → Three.js: x→x, z→y(up), y→z)
+  const scale = sceneDist / distKm;
+  return new THREE.Vector3(
+    ecf.x * scale,
+    ecf.z * scale,
+    ecf.y * scale
+  );
+}
+
+function propagateNow(satrec: SatRec) {
+  const now = new Date();
+  const gmst = gstime(now);
+  const posVel = propagate(satrec, now);
+  if (!posVel) return null;
+  const pos = posVel.position;
+  const vel = posVel.velocity;
+
+  if (!pos || typeof pos === "boolean" || !vel || typeof vel === "boolean")
+    return null;
+
+  const ecf = eciToEcf(pos, gmst);
+  const geo = eciToGeodetic(pos, gmst);
+  const speed = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2);
+
+  return {
+    position: ecfToVec3(ecf),
+    lat: geo.latitude * RAD2DEG,
+    lon: geo.longitude * RAD2DEG,
+    alt: geo.height,
+    speed: speed * 3600,
+  };
+}
+
+function safeSatrec(line1: string, line2: string): SatRec | null {
+  try {
+    return twoline2satrec(line1, line2);
+  } catch {
+    return null;
+  }
+}
+
+// ── Earth with canvas texture (land/ocean contrast) ────────
+function createEarthTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4096;
+  canvas.height = 2048;
+  const ctx = canvas.getContext("2d")!;
+
+  // Ocean
+  ctx.fillStyle = "#070b14";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const world = require("world-atlas/countries-50m.json") as Topology<{
+    land: GeometryCollection;
+    countries: GeometryCollection;
+  }>;
+
+  // Fill land masses
+  const landGeo = feature(world, world.objects.land);
+  ctx.fillStyle = "#151d2e";
+
+  const features =
+    landGeo.type === "FeatureCollection" ? landGeo.features : [landGeo];
+  for (const feat of features) {
+    const geom = feat.type === "Feature" ? feat.geometry : feat;
+    const polys =
+      geom.type === "Polygon"
+        ? [geom.coordinates]
+        : geom.type === "MultiPolygon"
+          ? geom.coordinates
+          : [];
+
+    for (const polygon of polys) {
+      ctx.beginPath();
+      for (const ring of polygon) {
+        for (let i = 0; i < ring.length; i++) {
+          const [lon, lat] = ring[i];
+          const x = ((lon + 180) / 360) * canvas.width;
+          const y = ((90 - lat) / 180) * canvas.height;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+      }
+      ctx.fill();
+    }
+  }
+
+  // Draw country borders
+  const borders = mesh(world, world.objects.countries);
+  ctx.strokeStyle = "#2a4a70";
+  ctx.lineWidth = 1.5;
+
+  for (const line of (borders as GeoJSON.MultiLineString).coordinates) {
+    ctx.beginPath();
+    for (let i = 0; i < line.length; i++) {
+      const [lon, lat] = line[i];
+      const x = ((lon + 180) / 360) * canvas.width;
+      const y = ((90 - lat) / 180) * canvas.height;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Subtle lat/lon grid
+  ctx.strokeStyle = "rgba(60, 100, 160, 0.08)";
+  ctx.lineWidth = 0.5;
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const y = ((90 - lat) / 180) * canvas.height;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+  for (let lon = -150; lon <= 180; lon += 30) {
+    const x = ((lon + 180) / 360) * canvas.width;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
 function Earth() {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const texture = useMemo(() => createEarthTexture(), []);
 
   return (
     <group>
-      {/* Earth sphere */}
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[2, 48, 48]} />
-        <meshStandardMaterial color="#1a1a2e" roughness={0.8} metalness={0.2} />
-      </mesh>
-      {/* Wireframe overlay */}
       <mesh>
-        <sphereGeometry args={[2.01, 24, 24]} />
-        <meshBasicMaterial
-          color="#3b82f6"
-          wireframe
-          transparent
-          opacity={0.08}
-        />
+        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
+        <meshBasicMaterial map={texture} />
       </mesh>
-      {/* Atmosphere glow */}
+
+      {/* Atmosphere */}
       <mesh>
-        <sphereGeometry args={[2.15, 32, 32]} />
+        <sphereGeometry args={[EARTH_RADIUS * 1.012, 48, 48]} />
         <meshBasicMaterial
           color="#3b82f6"
           transparent
-          opacity={0.05}
+          opacity={0.035}
           side={THREE.BackSide}
         />
       </mesh>
@@ -106,129 +225,410 @@ function Earth() {
   );
 }
 
-function Satellite({
-  position,
-  color,
-  name,
-}: {
-  position: THREE.Vector3;
-  color: string;
-  name: string;
-}) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <group position={position}>
-      <mesh
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-      >
-        <sphereGeometry args={[0.03, 8, 8]} />
-        <meshBasicMaterial color={color} />
-      </mesh>
-      {hovered && (
-        <Html distanceFactor={8}>
-          <div className="whitespace-nowrap rounded bg-card px-2 py-1 text-xs text-foreground border border-white/10">
-            {name}
-          </div>
-        </Html>
-      )}
-    </group>
-  );
-}
-
-function ConstellationGroup({
-  config,
+// ── Constellation points ───────────────────────────────────
+function ConstellationPoints({
+  group,
   visible,
 }: {
-  config: ConstellationConfig;
+  group: SatelliteGroup;
   visible: boolean;
 }) {
-  const groupRef = useRef<THREE.Group>(null);
+  const { satrecs, positions, pointsObj } = useMemo(() => {
+    const satrecs = group.tles
+      .map((tle) => safeSatrec(tle.line1, tle.line2))
+      .filter((s): s is SatRec => s !== null);
 
-  useFrame((_, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.02;
-    }
-  });
+    const positions = new Float32Array(satrecs.length * 3);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(positions, 3)
+    );
 
-  const orbitData = useMemo(() => {
-    return config.orbits.map((orbit) => {
-      const points = generateOrbitPoints(orbit.sma, orbit.inc, orbit.raan);
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({
-        color: config.color,
-        transparent: true,
-        opacity: 0.2,
-      });
-      const lineObj = new THREE.Line(geometry, material);
-
-      const satellites: THREE.Vector3[] = [];
-      for (let i = 0; i < config.satellitesPerOrbit; i++) {
-        const idx = Math.floor(
-          (i / config.satellitesPerOrbit) * points.length
-        );
-        satellites.push(points[idx]);
-      }
-
-      return { lineObj, satellites };
+    const material = new THREE.PointsMaterial({
+      color: group.color,
+      size: 0.03,
+      transparent: true,
+      opacity: 0.85,
+      sizeAttenuation: true,
     });
-  }, [config]);
+
+    const pointsObj = new THREE.Points(geometry, material);
+    return { satrecs, positions, pointsObj };
+  }, [group]);
+
+  useFrame(() => {
+    if (!visible) return;
+
+    const now = new Date();
+    const gmst = gstime(now);
+
+    for (let i = 0; i < satrecs.length; i++) {
+      const pv = propagate(satrecs[i], now);
+      if (!pv) continue;
+      const pos = pv.position;
+      if (pos && typeof pos !== "boolean") {
+        const ecf = eciToEcf(pos, gmst);
+        const v = ecfToVec3(ecf);
+        positions[i * 3] = v.x;
+        positions[i * 3 + 1] = v.y;
+        positions[i * 3 + 2] = v.z;
+      }
+    }
+
+    pointsObj.geometry.attributes.position.needsUpdate = true;
+  });
 
   if (!visible) return null;
 
+  return <primitive object={pointsObj} />;
+}
+
+// ── Notable satellite ──────────────────────────────────────
+function NotableSatellite({
+  data,
+  isSelected,
+  onSelect,
+}: {
+  data: NotableSatelliteData;
+  isSelected: boolean;
+  onSelect: (info: SatelliteInfo) => void;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
+  const nadirGeoRef = useRef<THREE.BufferGeometry | null>(null);
+
+  const satrec = useMemo(
+    () => safeSatrec(data.line1, data.line2),
+    [data.line1, data.line2]
+  );
+
+  // Orbit trail
+  const orbitTrail = useMemo(() => {
+    if (!satrec) return null;
+    const periodMin = (2 * Math.PI) / satrec.no;
+    const now = new Date();
+    const points: THREE.Vector3[] = [];
+    const steps = 200;
+
+    for (let i = 0; i <= steps; i++) {
+      const t = new Date(now.getTime() + (i / steps) * periodMin * 60000);
+      const gmst = gstime(t);
+      const pv = propagate(satrec, t);
+      if (!pv) continue;
+      const pos = pv.position;
+      if (pos && typeof pos !== "boolean") {
+        const ecf = eciToEcf(pos, gmst);
+        points.push(ecfToVec3(ecf));
+      }
+    }
+
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({
+      color: data.color,
+      transparent: true,
+      opacity: 0.2,
+    });
+    return new THREE.Line(geo, mat);
+  }, [satrec, data.color]);
+
+  // Nadir line
+  const nadirLine = useMemo(() => {
+    const positions = new Float32Array(6);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    nadirGeoRef.current = geo;
+
+    const mat = new THREE.LineDashedMaterial({
+      color: "#ffffff",
+      dashSize: 0.04,
+      gapSize: 0.03,
+      transparent: true,
+      opacity: 0.25,
+    });
+    const line = new THREE.Line(geo, mat);
+    line.computeLineDistances();
+    return line;
+  }, []);
+
+  useFrame(() => {
+    if (!satrec || !groupRef.current) return;
+    const result = propagateNow(satrec);
+    if (!result) return;
+
+    groupRef.current.position.copy(result.position);
+
+    // Update nadir line
+    if (isSelected && nadirGeoRef.current) {
+      const attr = nadirGeoRef.current.getAttribute(
+        "position"
+      ) as THREE.BufferAttribute;
+      const ground = result.position
+        .clone()
+        .normalize()
+        .multiplyScalar(EARTH_RADIUS);
+      attr.setXYZ(0, result.position.x, result.position.y, result.position.z);
+      attr.setXYZ(1, ground.x, ground.y, ground.z);
+      attr.needsUpdate = true;
+      nadirLine.computeLineDistances();
+    }
+  });
+
+  const handleClick = useCallback(
+    (e: THREE.Event & { stopPropagation?: () => void }) => {
+      if (e.stopPropagation) e.stopPropagation();
+      if (!satrec) return;
+      const result = propagateNow(satrec);
+      if (!result) return;
+      onSelect({
+        id: data.id,
+        label: data.label,
+        description: data.description,
+        color: data.color,
+        altitude: Math.round(result.alt),
+        speed: Math.round(result.speed),
+        latitude: Math.round(result.lat * 100) / 100,
+        longitude: Math.round(result.lon * 100) / 100,
+      });
+    },
+    [satrec, data, onSelect]
+  );
+
+  if (!satrec) return null;
+
   return (
-    <group ref={groupRef}>
-      {orbitData.map((orbit, i) => (
-        <group key={i}>
-          <primitive object={orbit.lineObj} />
-          {orbit.satellites.map((pos, j) => (
-            <Satellite
-              key={j}
-              position={pos}
-              color={config.color}
-              name={`${config.name} Sat-${i * config.satellitesPerOrbit + j + 1}`}
+    <>
+      {orbitTrail && <primitive object={orbitTrail} />}
+      {isSelected && <primitive object={nadirLine} />}
+
+      <group ref={groupRef}>
+        <mesh
+          onClick={handleClick}
+          onPointerOver={() => {
+            setHovered(true);
+            document.body.style.cursor = "pointer";
+          }}
+          onPointerOut={() => {
+            setHovered(false);
+            document.body.style.cursor = "default";
+          }}
+        >
+          <sphereGeometry
+            args={[hovered || isSelected ? 0.035 : 0.025, 12, 12]}
+          />
+          <meshBasicMaterial
+            color={data.color}
+            transparent
+            opacity={isSelected ? 1 : 0.9}
+          />
+        </mesh>
+
+        {isSelected && (
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.05, 0.065, 32]} />
+            <meshBasicMaterial
+              color={data.color}
+              transparent
+              opacity={0.4}
+              side={THREE.DoubleSide}
             />
-          ))}
-        </group>
-      ))}
-    </group>
+          </mesh>
+        )}
+
+        {(hovered || isSelected) && (
+          <Html distanceFactor={8} style={{ pointerEvents: "none" }}>
+            <div className="whitespace-nowrap rounded-lg bg-card/95 px-3 py-1.5 text-xs font-medium text-foreground border border-white/10 backdrop-blur-sm shadow-lg">
+              <span
+                className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: data.color }}
+              />
+              {data.label}
+            </div>
+          </Html>
+        )}
+      </group>
+    </>
   );
 }
 
-interface SatelliteSceneProps {
-  visibleConstellations: Record<string, boolean>;
+// ── Camera controller ──────────────────────────────────────
+// Only takes over the camera when a satellite is selected or
+// briefly when returning from a selection. Otherwise hands off
+// completely so OrbitControls can work freely.
+function CameraController({
+  selectedSatrec,
+  controlsRef,
+}: {
+  selectedSatrec: SatRec | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  controlsRef: React.RefObject<any>;
+}) {
+  const { camera } = useThree();
+  const isReturning = useRef(false);
+  const prevSatrec = useRef<SatRec | null>(null);
+  const returnTarget = useRef(new THREE.Vector3(0, 3, 8));
+  const returnLookAt = useRef(new THREE.Vector3(0, 0, 0));
+
+  useFrame(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    // Detect deselection → snapshot current camera and start returning
+    if (prevSatrec.current && !selectedSatrec) {
+      isReturning.current = true;
+      // Return to a sensible default from wherever we are
+      returnTarget.current.set(0, 3, 8);
+      returnLookAt.current.set(0, 0, 0);
+    }
+    prevSatrec.current = selectedSatrec;
+
+    if (selectedSatrec) {
+      // Follow selected satellite
+      isReturning.current = false;
+      const result = propagateNow(selectedSatrec);
+      if (result) {
+        const dir = result.position.clone().normalize();
+        const dist = result.position.length();
+        const offset = Math.max(0.4, dist * 0.2);
+        const targetPos = result.position
+          .clone()
+          .add(dir.multiplyScalar(offset));
+
+        camera.position.lerp(targetPos, 0.025);
+        controls.target.lerp(result.position, 0.025);
+        controls.update();
+      }
+    } else if (isReturning.current) {
+      // Briefly return to default, then stop
+      camera.position.lerp(returnTarget.current, 0.03);
+      controls.target.lerp(returnLookAt.current, 0.03);
+      controls.update();
+
+      if (camera.position.distanceTo(returnTarget.current) < 0.15) {
+        isReturning.current = false;
+      }
+    }
+    // When idle: do nothing — OrbitControls has full control
+  });
+
+  return null;
 }
 
-function Scene({ visibleConstellations }: SatelliteSceneProps) {
+// ── Main scene ─────────────────────────────────────────────
+function Scene({
+  groups,
+  notable,
+  visibleConstellations,
+  selectedId,
+  onSelect,
+}: SceneProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const controlsRef = useRef<any>(null);
+
+  const satrecMap = useMemo(() => {
+    const map = new Map<string, SatRec>();
+    for (const n of notable) {
+      const sr = safeSatrec(n.line1, n.line2);
+      if (sr) map.set(n.id, sr);
+    }
+    return map;
+  }, [notable]);
+
+  // When selectedId changes from page (legend click), compute info and report
+  const prevSelectedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedId && selectedId !== prevSelectedIdRef.current) {
+      const sr = satrecMap.get(selectedId);
+      const nd = notable.find((n) => n.id === selectedId);
+      if (sr && nd) {
+        const result = propagateNow(sr);
+        if (result) {
+          onSelect({
+            id: nd.id,
+            label: nd.label,
+            description: nd.description,
+            color: nd.color,
+            altitude: Math.round(result.alt),
+            speed: Math.round(result.speed),
+            latitude: Math.round(result.lat * 100) / 100,
+            longitude: Math.round(result.lon * 100) / 100,
+          });
+        }
+      }
+    }
+    prevSelectedIdRef.current = selectedId;
+  }, [selectedId, satrecMap, notable, onSelect]);
+
+  const handleSatelliteClick = useCallback(
+    (info: SatelliteInfo) => {
+      onSelect(info);
+    },
+    [onSelect]
+  );
+
+  const handleMiss = useCallback(() => {
+    onSelect(null);
+  }, [onSelect]);
+
   return (
     <>
-      <ambientLight intensity={0.3} />
-      <directionalLight position={[5, 3, 5]} intensity={0.8} />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[5, 3, 5]} intensity={0.5} />
+
+      {/* Click background to deselect */}
+      <mesh onClick={handleMiss}>
+        <sphereGeometry args={[50, 8, 8]} />
+        <meshBasicMaterial visible={false} side={THREE.BackSide} />
+      </mesh>
+
       <Earth />
-      {CONSTELLATIONS.map((config) => (
-        <ConstellationGroup
-          key={config.name}
-          config={config}
-          visible={visibleConstellations[config.name] ?? true}
+
+      {groups.map((g) => (
+        <ConstellationPoints
+          key={g.name}
+          group={g}
+          visible={visibleConstellations[g.name] ?? true}
         />
       ))}
+
+      {notable.map((n) => (
+        <NotableSatellite
+          key={n.id}
+          data={n}
+          isSelected={selectedId === n.id}
+          onSelect={handleSatelliteClick}
+        />
+      ))}
+
+      <CameraController
+        selectedSatrec={
+          selectedId ? (satrecMap.get(selectedId) ?? null) : null
+        }
+        controlsRef={controlsRef}
+      />
+
       <OrbitControls
+        ref={controlsRef}
         enablePan={false}
-        minDistance={4}
-        maxDistance={12}
-        autoRotate
-        autoRotateSpeed={0.2}
+        minDistance={2.5}
+        maxDistance={20}
+        autoRotate={!selectedId}
+        autoRotateSpeed={0.3}
       />
     </>
   );
 }
 
-export default function SatelliteSceneWrapper(props: SatelliteSceneProps) {
+// ── Wrapper ────────────────────────────────────────────────
+export default function SatelliteSceneWrapper(
+  props: Omit<SceneProps, "onSelect"> & {
+    onSelect: (info: SatelliteInfo | null) => void;
+  }
+) {
   return (
     <Canvas
       camera={{ position: [0, 3, 8], fov: 45 }}
-      dpr={[1, 1.5]}
+      dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
       style={{ background: "transparent" }}
     >
@@ -236,5 +636,3 @@ export default function SatelliteSceneWrapper(props: SatelliteSceneProps) {
     </Canvas>
   );
 }
-
-export { CONSTELLATIONS };

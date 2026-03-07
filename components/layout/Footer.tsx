@@ -4,7 +4,10 @@ import { SOCIAL_LINKS, SITE_CONFIG } from "@/lib/constants";
 
 const footerLinks = [
   { href: "/about", label: "About" },
-  { href: "/tools", label: "Tools" },
+  { href: "/intel", label: "Intel" },
+  { href: "/space", label: "Space" },
+  { href: "/geopolitics", label: "Geopolitics" },
+  { href: "/projects", label: "Projects" },
   { href: "/contact", label: "Contact" },
 ];
 

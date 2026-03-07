@@ -1,25 +1,23 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import L from "leaflet";
-import {
-  MapContainer,
-  TileLayer,
-  GeoJSON,
-  Polyline,
-  Polygon,
-  CircleMarker,
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import Map, {
+  Source,
+  Layer,
   Marker,
-  Tooltip,
+  Popup,
   useMap,
-} from "react-leaflet";
+} from "react-map-gl/maplibre";
+import type { MapRef } from "react-map-gl/maplibre";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { feature } from "topojson-client";
-import "leaflet/dist/leaflet.css";
 import type { Conflict } from "@/lib/conflicts";
-import type { FeatureCollection, Feature, Geometry } from "geojson";
+import type { FeatureCollection } from "geojson";
 import type { Topology } from "topojson-specification";
+import MapLayerControls from "./MapLayerControls";
+import type { LayerToggle } from "./MapLayerControls";
 
-/* ── Load world country boundaries (50m resolution) ── */
+/* ── World country boundaries (50m) ── */
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const worldTopo: any = require("world-atlas/countries-50m.json");
 const worldGeo = feature(
@@ -27,22 +25,51 @@ const worldGeo = feature(
   worldTopo.objects.countries
 ) as unknown as FeatureCollection;
 
-function getCountryFeatures(codes: string[]): Feature<Geometry>[] {
-  return worldGeo.features.filter((f) =>
-    codes.includes(String(f.id))
-  );
+function getCountryCollection(codes: string[]): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: worldGeo.features.filter((f) => codes.includes(String(f.id))),
+  };
 }
 
-/* ── Fly-to animation ── */
-function FlyTo({ center, zoom }: { center: [number, number]; zoom: number }) {
-  const map = useMap();
-  useEffect(() => {
-    map.flyTo(center, zoom, { duration: 1.5 });
-  }, [center, zoom, map]);
-  return null;
+/* ── Data converters (lat,lng → lng,lat for GeoJSON) ── */
+function frontLineToGeoJSON(coords: [number, number][]): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: [{
+      type: "Feature",
+      properties: {},
+      geometry: { type: "LineString", coordinates: coords.map(([lat, lng]) => [lng, lat]) },
+    }],
+  };
 }
 
-/* ── Custom icon builders ── */
+function controlledAreasToGeoJSON(areas: Conflict["controlledAreas"]): FeatureCollection {
+  if (!areas?.length) return { type: "FeatureCollection", features: [] };
+  return {
+    type: "FeatureCollection",
+    features: areas.map((area, i) => ({
+      type: "Feature" as const,
+      properties: { label: area.label, color: area.color, fillOpacity: area.fillOpacity ?? 0.1, index: i },
+      geometry: { type: "Polygon" as const, coordinates: [area.positions.map(([lat, lng]) => [lng, lat])] },
+    })),
+  };
+}
+
+function otherConflictsToGeoJSON(conflicts: Conflict[], currentId: string): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: conflicts
+      .filter((c) => c.id !== currentId)
+      .map((c) => ({
+        type: "Feature" as const,
+        properties: { id: c.id, name: c.shortName, color: c.color },
+        geometry: { type: "Point" as const, coordinates: [c.center[1], c.center[0]] },
+      })),
+  };
+}
+
+/* ── Dot style configs ── */
 const EVENT_COLORS: Record<string, string> = {
   strike: "#ef4444",
   battle: "#f97316",
@@ -50,36 +77,181 @@ const EVENT_COLORS: Record<string, string> = {
   political: "#60a5fa",
 };
 
-function eventIcon(type: string) {
-  const color = EVENT_COLORS[type] || "#ef4444";
-  return L.divIcon({
-    className: "",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    html: `
-      <div style="position:relative;width:28px;height:28px;">
-        <div style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:0.2;animation:cmap-pulse 2.5s ease-out infinite;"></div>
-        <div style="position:absolute;inset:3px;border-radius:50%;background:${color};opacity:0.12;animation:cmap-pulse 2.5s ease-out 0.5s infinite;"></div>
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 8px 2px ${color}40;"></div>
-      </div>`,
-  });
-}
-
-function labelIcon(text: string, fontSize = 11) {
-  return L.divIcon({
-    className: "",
-    iconSize: [1, 1],
-    iconAnchor: [0, 0],
-    html: `<div style="white-space:nowrap;font-size:${fontSize}px;font-weight:700;color:rgba(255,255,255,0.18);letter-spacing:4px;text-transform:uppercase;font-family:var(--font-geist-mono),ui-monospace,monospace;pointer-events:none;transform:translate(-50%,-50%);text-shadow:0 0 20px rgba(0,0,0,0.5);">${text}</div>`,
-  });
-}
-
 const LOCATION_COLORS: Record<string, string> = {
   capital: "#60a5fa",
   city: "#94a3b8",
   hotspot: "#ef4444",
   event: "#f59e0b",
 };
+
+const LOCATION_SIZES: Record<string, number> = {
+  capital: 9,
+  city: 6,
+  hotspot: 8,
+  event: 6,
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  strike: "Strike",
+  battle: "Battle",
+  humanitarian: "Humanitarian",
+  political: "Political",
+  capital: "Capital",
+  city: "City",
+  hotspot: "Hotspot",
+  event: "Event",
+};
+
+/* ── Shared hover tooltip ── */
+function HoverTooltip({
+  title,
+  description,
+  color,
+  type,
+  date,
+}: {
+  title: string;
+  description: string;
+  color: string;
+  type: string;
+  date?: string;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: "100%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        marginBottom: 6,
+        background: "rgba(10, 10, 18, 0.94)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 8,
+        padding: "8px 12px",
+        minWidth: 160,
+        maxWidth: 260,
+        boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
+        backdropFilter: "blur(12px)",
+        pointerEvents: "none",
+        zIndex: 10,
+        whiteSpace: "normal",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+        <span style={{
+          display: "inline-block", width: 7, height: 7, borderRadius: "50%",
+          background: color, boxShadow: `0 0 4px ${color}`, flexShrink: 0,
+        }} />
+        <span style={{ fontWeight: 700, fontSize: 12, color: "#e4e4e7", lineHeight: 1.3 }}>
+          {title}
+        </span>
+      </div>
+      {description && (
+        <div style={{ fontSize: 11, color: "#a1a1aa", lineHeight: 1.4 }}>
+          {description}
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+        <span style={{
+          fontSize: 9, fontWeight: 600, textTransform: "uppercase",
+          letterSpacing: "0.5px", color, opacity: 0.9,
+          background: `${color}18`, padding: "1px 5px", borderRadius: 3,
+        }}>
+          {TYPE_LABELS[type] || type}
+        </span>
+        {date && (
+          <span style={{ fontSize: 10, color: "#71717a" }}>{date}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Unified map dot — handles both pulsing events and static locations ── */
+function MapDot({
+  lat,
+  lng,
+  color,
+  size,
+  title,
+  description,
+  type,
+  date,
+  pulse,
+  stroke,
+}: {
+  lat: number;
+  lng: number;
+  color: string;
+  size: number;
+  title: string;
+  description: string;
+  type: string;
+  date?: string;
+  pulse?: boolean;
+  stroke?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const hitSize = Math.max(size + 20, 28);
+
+  return (
+    <Marker longitude={lng} latitude={lat} anchor="center">
+      <div
+        className="cmap-event-marker"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{ position: "relative", width: hitSize, height: hitSize, cursor: "pointer" }}
+      >
+        {/* Pulse rings */}
+        {pulse && (
+          <>
+            <span
+              className="cmap-pulse-ring"
+              style={{
+                position: "absolute", inset: (hitSize - size - 4) / 2, borderRadius: "50%",
+                background: color, opacity: 0.25,
+              }}
+            />
+            <span
+              className="cmap-pulse-ring cmap-pulse-ring-delayed"
+              style={{
+                position: "absolute", inset: (hitSize - size) / 2, borderRadius: "50%",
+                background: color, opacity: 0.15,
+              }}
+            />
+          </>
+        )}
+        {/* Core dot */}
+        <span
+          style={{
+            position: "absolute", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: size, height: size, borderRadius: "50%",
+            background: color,
+            boxShadow: pulse ? `0 0 6px 1px ${color}60` : undefined,
+            border: stroke ? `2px solid ${color}` : undefined,
+            opacity: pulse ? 1 : 0.85,
+          }}
+        />
+        {/* Hover tooltip */}
+        {hovered && (
+          <HoverTooltip title={title} description={description} color={color} type={type} date={date} />
+        )}
+      </div>
+    </Marker>
+  );
+}
+
+/* ── Fly-to controller ── */
+function FlyToController({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const { current: map } = useMap();
+  useEffect(() => {
+    if (map) {
+      map.flyTo({ center: [center[1], center[0]], zoom, duration: 1500 });
+    }
+  }, [center, zoom, map]);
+  return null;
+}
 
 /* ── Map component ── */
 export default function ConflictMap({
@@ -91,258 +263,237 @@ export default function ConflictMap({
   allConflicts: Conflict[];
   onSelectConflict: (id: string) => void;
 }) {
-  const countryFeatures = useMemo(
-    () => getCountryFeatures(conflict.countryCodes),
-    [conflict.countryCodes]
-  );
+  const mapRef = useRef<MapRef>(null);
+  const [popup, setPopup] = useState<{
+    lng: number;
+    lat: number;
+    title: string;
+    description: string;
+    color?: string;
+  } | null>(null);
+  const [externalGeoJSON, setExternalGeoJSON] = useState<Record<string, FeatureCollection>>({});
+  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({
+    territory: true,
+    frontline: true,
+    locations: true,
+    events: true,
+    labels: true,
+    others: true,
+  });
 
-  const eventIcons = useMemo(() => {
-    const map = new Map<string, L.DivIcon>();
-    for (const t of ["strike", "battle", "humanitarian", "political"]) {
-      map.set(t, eventIcon(t));
-    }
-    return map;
+  const layerToggles: LayerToggle[] = useMemo(() => [
+    { id: "territory", label: "Territory", color: conflict.color, enabled: layerVisibility.territory },
+    { id: "frontline", label: "Front lines", color: "#ffffff", enabled: layerVisibility.frontline },
+    { id: "locations", label: "Locations", color: "#94a3b8", enabled: layerVisibility.locations },
+    { id: "events", label: "Events", color: "#ef4444", enabled: layerVisibility.events },
+    { id: "labels", label: "Labels", color: "#ffffff", enabled: layerVisibility.labels },
+    { id: "others", label: "Other conflicts", color: "#71717a", enabled: layerVisibility.others },
+  ], [conflict.color, layerVisibility]);
+
+  const toggleLayer = useCallback((id: string) => {
+    setLayerVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
-  const regionLabelIcons = useMemo(
-    () => (conflict.regionLabels || []).map((rl) => labelIcon(rl.text, rl.fontSize)),
-    [conflict.regionLabels]
-  );
+  // Load external GeoJSON files
+  useEffect(() => {
+    async function loadGeoJSON() {
+      const files: Record<string, string> = {
+        "ukraine-occupied": "/geojson/ukraine-occupied.geojson",
+        gaza: "/geojson/gaza.geojson",
+      };
+      const loaded: Record<string, FeatureCollection> = {};
+      for (const [key, url] of Object.entries(files)) {
+        try {
+          const res = await fetch(url);
+          if (res.ok) loaded[key] = await res.json();
+        } catch { /* skip */ }
+      }
+      setExternalGeoJSON(loaded);
+    }
+    loadGeoJSON();
+  }, []);
+
+  // Memoize GeoJSON
+  const countryData = useMemo(() => getCountryCollection(conflict.countryCodes), [conflict.countryCodes]);
+  const frontLineData = useMemo(() => conflict.frontLine ? frontLineToGeoJSON(conflict.frontLine) : null, [conflict.frontLine]);
+  const controlledAreasData = useMemo(() => controlledAreasToGeoJSON(conflict.controlledAreas), [conflict.controlledAreas]);
+  const otherConflictsData = useMemo(() => otherConflictsToGeoJSON(allConflicts, conflict.id), [allConflicts, conflict.id]);
+
+  // Determine occupied territory data
+  const occupiedTerritoryData = useMemo(() => {
+    if (conflict.id === "ukraine" && externalGeoJSON["ukraine-occupied"]) {
+      return externalGeoJSON["ukraine-occupied"];
+    }
+    if (conflict.id === "middleeast" && externalGeoJSON["gaza"]) {
+      const gazaFeatures = externalGeoJSON["gaza"].features.map((f) => ({
+        ...f,
+        properties: { ...f.properties, label: "Gaza Strip", color: "#f97316", fillOpacity: 0.2 },
+      }));
+      const lebanonFeatures = controlledAreasData.features.filter((f) => f.properties?.label?.includes("Lebanon"));
+      return { type: "FeatureCollection" as const, features: [...gazaFeatures, ...lebanonFeatures] };
+    }
+    return controlledAreasData;
+  }, [conflict.id, externalGeoJSON, controlledAreasData]);
+
+  // Safe query for interactive layers
+  const safeQuery = useCallback((map: maplibregl.Map, point: maplibregl.PointLike, layers: string[]) => {
+    const existing = layers.filter((l) => map.getLayer(l));
+    if (!existing.length) return [];
+    return map.queryRenderedFeatures(point, { layers: existing });
+  }, []);
+
+  const onMapClick = useCallback((e: maplibregl.MapMouseEvent) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const features = safeQuery(map, e.point, ["other-conflicts-circle"]);
+    if (features.length > 0) {
+      const id = features[0].properties?.id;
+      if (id) onSelectConflict(id);
+    }
+  }, [onSelectConflict, safeQuery]);
+
+  const onMapMouseMove = useCallback((e: maplibregl.MapMouseEvent) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    // Other conflict markers only — all dots use unified HTML Marker tooltips
+    const otherFeats = safeQuery(map, e.point, ["other-conflicts-circle"]);
+    if (otherFeats.length > 0) {
+      const props = otherFeats[0].properties;
+      const geom = otherFeats[0].geometry;
+      if (geom.type === "Point") {
+        map.getCanvas().style.cursor = "pointer";
+        setPopup({
+          lng: geom.coordinates[0], lat: geom.coordinates[1],
+          title: props?.name || "", description: "Click to view", color: props?.color,
+        });
+        return;
+      }
+    }
+
+    map.getCanvas().style.cursor = "";
+    setPopup(null);
+  }, [safeQuery]);
 
   return (
-    <MapContainer
-      center={conflict.center}
-      zoom={conflict.zoom}
-      className="conflict-map h-full w-full"
-      style={{ minHeight: "600px", background: "#0a0a0f" }}
-      zoomControl={false}
-      attributionControl={false}
-      minZoom={3}
-      maxZoom={14}
-    >
-      <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-      />
-      <FlyTo center={conflict.center} zoom={conflict.zoom} />
+    <div className="relative">
+      <MapLayerControls layers={layerToggles} onToggle={toggleLayer} />
+      <Map
+        ref={mapRef}
+        initialViewState={{ longitude: conflict.center[1], latitude: conflict.center[0], zoom: conflict.zoom }}
+        style={{ width: "100%", minHeight: "600px" }}
+        mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        attributionControl={false}
+        minZoom={3}
+        maxZoom={14}
+        onClick={onMapClick}
+        onMouseMove={onMapMouseMove}
+        onMouseLeave={() => setPopup(null)}
+      >
+        <FlyToController center={conflict.center} zoom={conflict.zoom} />
 
-      {/* ── 1. Country boundary fills (subtle) ── */}
-      {countryFeatures.map((feat) => (
-        <GeoJSON
-          key={`${conflict.id}-fill-${feat.id}`}
-          data={feat}
-          style={{
-            color: "transparent",
-            weight: 0,
-            fillColor: conflict.color,
-            fillOpacity: 0.05,
-          }}
-        />
-      ))}
+        {/* ── 1. Country boundaries ── */}
+        <Source id="countries" type="geojson" data={countryData}>
+          <Layer id="country-fill" type="fill" paint={{ "fill-color": conflict.color, "fill-opacity": 0.04 }} />
+          <Layer id="country-glow" type="line" paint={{ "line-color": conflict.color, "line-width": 6, "line-opacity": 0.06, "line-blur": 3 }} />
+          <Layer id="country-outline" type="line" paint={{ "line-color": conflict.color, "line-width": 1.5, "line-opacity": 0.5 }} />
+        </Source>
 
-      {/* ── 2. Occupied / controlled area polygons ── */}
-      {conflict.controlledAreas?.map((area, i) => (
-        <Polygon
-          key={`area-${conflict.id}-${i}`}
-          positions={area.positions}
-          pathOptions={{
-            color: area.color,
-            fillColor: area.color,
-            fillOpacity: area.fillOpacity ?? 0.1,
-            weight: 1.5,
-            opacity: 0.5,
-            dashArray: "6, 4",
-          }}
-        >
-          <Tooltip direction="center" className="conflict-tooltip">
-            <span style={{ fontWeight: 600, fontSize: 11 }}>
-              {area.label}
-            </span>
-          </Tooltip>
-        </Polygon>
-      ))}
+        {/* ── 2. Occupied / controlled territory ── */}
+        {layerVisibility.territory && (
+          <Source id="occupied" type="geojson" data={occupiedTerritoryData}>
+            <Layer id="occupied-fill" type="fill" paint={{
+              "fill-color": ["coalesce", ["get", "color"], conflict.color],
+              "fill-opacity": ["coalesce", ["get", "fillOpacity"], 0.12],
+            }} />
+            <Layer id="occupied-outline" type="line" paint={{
+              "line-color": ["coalesce", ["get", "color"], conflict.color],
+              "line-width": 1.5, "line-opacity": 0.4, "line-dasharray": [4, 3],
+            }} />
+          </Source>
+        )}
 
-      {/* ── 3. Country boundary outlines (glow + sharp) ── */}
-      {countryFeatures.map((feat) => (
-        <GeoJSON
-          key={`${conflict.id}-glow-${feat.id}`}
-          data={feat}
-          style={{
-            color: conflict.color,
-            weight: 6,
-            opacity: 0.07,
-            fillColor: "transparent",
-            fillOpacity: 0,
-          }}
-        />
-      ))}
-      {countryFeatures.map((feat) => (
-        <GeoJSON
-          key={`${conflict.id}-outline-${feat.id}`}
-          data={feat}
-          style={{
-            color: conflict.color,
-            weight: 1.5,
-            opacity: 0.55,
-            fillColor: "transparent",
-            fillOpacity: 0,
-            dashArray: "",
-          }}
-        />
-      ))}
+        {/* ── 3. Front line ── */}
+        {frontLineData && layerVisibility.frontline && (
+          <Source id="frontline" type="geojson" data={frontLineData}>
+            <Layer id="frontline-glow" type="line" paint={{ "line-color": conflict.color, "line-width": 10, "line-opacity": 0.08, "line-blur": 4 }} layout={{ "line-cap": "round", "line-join": "round" }} />
+            <Layer id="frontline-white" type="line" paint={{ "line-color": "#ffffff", "line-width": 3, "line-opacity": 0.15 }} layout={{ "line-cap": "round", "line-join": "round" }} />
+            <Layer id="frontline-main" type="line" paint={{ "line-color": conflict.color, "line-width": 2, "line-opacity": 0.9, "line-dasharray": [4, 3] }} layout={{ "line-cap": "round", "line-join": "round" }} />
+          </Source>
+        )}
 
-      {/* ── 4. Front line ── */}
-      {conflict.frontLine && (
-        <>
-          <Polyline
-            positions={conflict.frontLine}
-            pathOptions={{
-              color: conflict.color,
-              weight: 10,
-              opacity: 0.08,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
+        {/* ── 4. Key location markers ── */}
+        {layerVisibility.locations && conflict.keyLocations.map((loc) => (
+          <MapDot
+            key={`${conflict.id}-loc-${loc.name}`}
+            lat={loc.lat}
+            lng={loc.lng}
+            color={LOCATION_COLORS[loc.type] || "#94a3b8"}
+            size={LOCATION_SIZES[loc.type] || 6}
+            title={loc.name}
+            description={loc.description}
+            type={loc.type}
+            stroke={loc.type === "capital"}
           />
-          <Polyline
-            positions={conflict.frontLine}
-            pathOptions={{
-              color: "#ffffff",
-              weight: 3,
-              opacity: 0.15,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
-          <Polyline
-            positions={conflict.frontLine}
-            pathOptions={{
-              color: conflict.color,
-              weight: 2,
-              dashArray: "6, 4",
-              opacity: 0.9,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
-        </>
-      )}
-
-      {/* ── 5. Region labels ── */}
-      {conflict.regionLabels?.map((rl, i) => (
-        <Marker
-          key={`label-${conflict.id}-${i}`}
-          position={[rl.lat, rl.lng]}
-          icon={regionLabelIcons[i]}
-          interactive={false}
-        />
-      ))}
-
-      {/* ── 6. Recent event markers (pulsing) ── */}
-      {conflict.recentEvents?.map((ev, i) => (
-        <Marker
-          key={`event-${conflict.id}-${i}`}
-          position={[ev.lat, ev.lng]}
-          icon={eventIcons.get(ev.type) || eventIcons.get("strike")!}
-        >
-          <Tooltip
-            direction="top"
-            offset={[0, -16]}
-            className="conflict-tooltip"
-          >
-            <div style={{ maxWidth: 220 }}>
-              <div
-                style={{
-                  fontWeight: 700,
-                  fontSize: 12,
-                  marginBottom: 3,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: EVENT_COLORS[ev.type] || "#ef4444",
-                    boxShadow: `0 0 4px ${EVENT_COLORS[ev.type] || "#ef4444"}`,
-                  }}
-                />
-                {ev.title}
-              </div>
-              <div style={{ fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
-                {ev.description}
-              </div>
-            </div>
-          </Tooltip>
-        </Marker>
-      ))}
-
-      {/* ── 7. Other conflict zone markers ── */}
-      {allConflicts
-        .filter((c) => c.id !== conflict.id)
-        .map((c) => (
-          <CircleMarker
-            key={c.id}
-            center={c.center}
-            radius={7}
-            pathOptions={{
-              color: c.color,
-              fillColor: c.color,
-              fillOpacity: 0.15,
-              weight: 1.5,
-            }}
-            eventHandlers={{ click: () => onSelectConflict(c.id) }}
-          >
-            <Tooltip
-              direction="top"
-              offset={[0, -8]}
-              className="conflict-tooltip"
-            >
-              <span style={{ fontWeight: 600, fontSize: 12 }}>
-                {c.shortName}
-              </span>
-            </Tooltip>
-          </CircleMarker>
         ))}
 
-      {/* ── 8. Key location markers ── */}
-      {conflict.keyLocations.map((loc) => {
-        const color = LOCATION_COLORS[loc.type] || "#94a3b8";
-        const isCapital = loc.type === "capital";
-        return (
-          <CircleMarker
-            key={`loc-${conflict.id}-${loc.name}`}
-            center={[loc.lat, loc.lng]}
-            radius={isCapital ? 5 : 3}
-            pathOptions={{
-              color: isCapital ? color : "transparent",
-              fillColor: color,
-              fillOpacity: isCapital ? 1 : 0.75,
-              weight: isCapital ? 2 : 0,
-            }}
-          >
-            <Tooltip
-              direction="top"
-              offset={[0, -5]}
-              className="conflict-tooltip"
-            >
-              <div>
-                <span style={{ fontWeight: 700, fontSize: 12 }}>
-                  {loc.name}
-                </span>
-                <br />
-                <span style={{ fontSize: 11, opacity: 0.7 }}>
-                  {loc.description}
-                </span>
+        {/* ── 5. Pulsing event markers ── */}
+        {layerVisibility.events && conflict.recentEvents?.map((ev, i) => (
+          <MapDot
+            key={`${conflict.id}-ev-${i}`}
+            lat={ev.lat}
+            lng={ev.lng}
+            color={EVENT_COLORS[ev.type] || "#ef4444"}
+            size={7}
+            title={ev.title}
+            description={ev.description}
+            type={ev.type}
+            date={ev.date}
+            pulse
+          />
+        ))}
+
+        {/* ── 6. Other conflict markers ── */}
+        {layerVisibility.others && (
+          <Source id="other-conflicts" type="geojson" data={otherConflictsData}>
+            <Layer id="other-conflicts-circle" type="circle" paint={{
+              "circle-radius": 6, "circle-color": ["get", "color"], "circle-opacity": 0.15,
+              "circle-stroke-color": ["get", "color"], "circle-stroke-width": 1.5,
+            }} />
+          </Source>
+        )}
+
+        {/* ── 7. Region labels ── */}
+        {layerVisibility.labels && conflict.regionLabels && (
+          <Source id="region-labels" type="geojson" data={{
+            type: "FeatureCollection",
+            features: conflict.regionLabels.map((rl) => ({
+              type: "Feature" as const,
+              properties: { text: rl.text, fontSize: rl.fontSize || 11 },
+              geometry: { type: "Point" as const, coordinates: [rl.lng, rl.lat] },
+            })),
+          }}>
+            <Layer id="region-labels-text" type="symbol"
+              layout={{ "text-field": ["get", "text"], "text-size": ["get", "fontSize"], "text-font": ["Open Sans Bold"], "text-letter-spacing": 0.3, "text-allow-overlap": true }}
+              paint={{ "text-color": "rgba(255, 255, 255, 0.15)", "text-halo-color": "rgba(0, 0, 0, 0.3)", "text-halo-width": 1 }} />
+          </Source>
+        )}
+
+        {/* ── Popup ── */}
+        {popup && (
+          <Popup longitude={popup.lng} latitude={popup.lat} closeButton={false} closeOnClick={true} anchor="bottom" offset={14} className="conflict-popup">
+            <div style={{ maxWidth: 240 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                {popup.color && (
+                  <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: popup.color, boxShadow: `0 0 4px ${popup.color}` }} />
+                )}
+                {popup.title}
               </div>
-            </Tooltip>
-          </CircleMarker>
-        );
-      })}
-    </MapContainer>
+              <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.4 }}>{popup.description}</div>
+            </div>
+          </Popup>
+        )}
+      </Map>
+    </div>
   );
 }

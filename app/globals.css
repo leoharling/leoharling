@@ -60,13 +60,12 @@ body {
   background-clip: text;
 }
 
-/* ── Leaflet dark theme ── */
-.leaflet-container {
-  background: #0a0a0f !important;
+/* ── MapLibre dark theme ── */
+.maplibregl-map {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-.conflict-map .leaflet-tooltip {
+.conflict-popup .maplibregl-popup-content {
   background: rgba(10, 10, 18, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #e4e4e7;
@@ -77,12 +76,8 @@ body {
   backdrop-filter: blur(12px);
 }
 
-.conflict-map .leaflet-tooltip-top::before {
+.conflict-popup .maplibregl-popup-tip {
   border-top-color: rgba(10, 10, 18, 0.92);
-}
-
-.conflict-map .leaflet-tooltip-bottom::before {
-  border-bottom-color: rgba(10, 10, 18, 0.92);
 }
 
 /* Map vignette overlay */
@@ -97,17 +92,35 @@ body {
   pointer-events: none;
   border-radius: 0.75rem;
   box-shadow: inset 0 0 60px 10px rgba(0, 0, 0, 0.25);
-  z-index: 800;
+  z-index: 2;
 }
 
-/* Pulsing event markers */
+/* ── Pulsing event markers ── */
+.cmap-pulse-ring {
+  animation: cmap-pulse 2.5s ease-out infinite;
+}
+
+.cmap-pulse-ring-delayed {
+  animation-delay: 0.6s;
+}
+
 @keyframes cmap-pulse {
   0% {
     transform: scale(1);
-    opacity: 0.2;
+    opacity: 0.25;
   }
   100% {
-    transform: scale(3.5);
+    transform: scale(2.2);
     opacity: 0;
   }
 }
+
+/* Prevent MapLibre marker from capturing all pointer events */
+.maplibregl-marker {
+  pointer-events: none;
+}
+
+.cmap-event-marker {
+  pointer-events: auto;
+}
+

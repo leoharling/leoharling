@@ -4,12 +4,21 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { conflicts, getDaysSince } from "@/lib/conflicts";
 import FadeIn from "@/components/ui/FadeIn";
+import EscalationBadge from "@/components/tools/EscalationBadge";
+import ConflictTimeline from "@/components/tools/ConflictTimeline";
+import ActorsPanel from "@/components/tools/ActorsPanel";
+import DiplomaticTracker from "@/components/tools/DiplomaticTracker";
+import HumanitarianDashboard from "@/components/tools/HumanitarianDashboard";
 import {
   ExternalLink,
   AlertTriangle,
   Activity,
   Globe,
   RefreshCw,
+  Users,
+  Handshake,
+  Crosshair,
+  Heart,
 } from "lucide-react";
 
 const ConflictMap = dynamic(
@@ -59,7 +68,10 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const REFRESH_INTERVAL = 5 * 60 * 1000;
+
+type InfoTab = "situations" | "actors" | "diplomacy";
+type SidebarTab = "kpis" | "humanitarian";
 
 export default function ConflictMonitor() {
   const [selectedId, setSelectedId] = useState("ukraine");
@@ -67,11 +79,19 @@ export default function ConflictMonitor() {
   const [newsLoading, setNewsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<InfoTab>("situations");
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("kpis");
 
   const selected = useMemo(
     () => conflicts.find((c) => c.id === selectedId)!,
     [selectedId]
   );
+
+  // Reset tabs on conflict change
+  useEffect(() => {
+    setActiveTab("situations");
+    setSidebarTab("kpis");
+  }, [selectedId]);
 
   const fetchNews = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -88,7 +108,6 @@ export default function ConflictMonitor() {
     }
   }, []);
 
-  // Initial fetch + auto-refresh
   useEffect(() => {
     fetchNews();
     const interval = setInterval(() => fetchNews(false), REFRESH_INTERVAL);
@@ -107,6 +126,13 @@ export default function ConflictMonitor() {
     { label: "Countries Affected", value: "15+" },
     { label: "People Displaced", value: "~26M" },
     { label: "Status", value: "Live" },
+  ];
+
+  // Build available tabs
+  const infoTabs: { id: InfoTab; label: string; icon: typeof Crosshair; available: boolean }[] = [
+    { id: "situations", label: "Situations", icon: Crosshair, available: !!(selected.recentEvents?.length) },
+    { id: "actors", label: "Key Actors", icon: Users, available: !!(selected.actors?.length) },
+    { id: "diplomacy", label: "Diplomacy", icon: Handshake, available: !!selected.diplomatic },
   ];
 
   return (
@@ -131,10 +157,7 @@ export default function ConflictMonitor() {
             disabled={refreshing}
             className="ml-auto flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-50"
           >
-            <RefreshCw
-              size={12}
-              className={refreshing ? "animate-spin" : ""}
-            />
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
             Refresh
           </button>
         </div>
@@ -151,10 +174,7 @@ export default function ConflictMonitor() {
       <FadeIn delay={0.1}>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {globalStats.map((s) => (
-            <div
-              key={s.label}
-              className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3"
-            >
+            <div key={s.label} className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3">
               <p className="text-2xl font-bold font-mono">{s.value}</p>
               <p className="text-xs text-muted-foreground">{s.label}</p>
             </div>
@@ -175,44 +195,50 @@ export default function ConflictMonitor() {
                   : "bg-white/[0.03] text-muted-foreground hover:bg-white/5 hover:text-foreground"
               }`}
             >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: c.color }}
-              />
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
               {c.shortName}
             </button>
           ))}
         </div>
       </FadeIn>
 
-      {/* Selected Conflict Header */}
+      {/* Selected Conflict Header + Escalation */}
       <FadeIn delay={0.2}>
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <h2 className="text-2xl font-bold">{selected.name}</h2>
           <span
             className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-            style={{
-              backgroundColor: selected.color + "15",
-              color: selected.color,
-            }}
+            style={{ backgroundColor: selected.color + "15", color: selected.color }}
           >
-            <span
-              className="h-1.5 w-1.5 rounded-full animate-pulse"
-              style={{ backgroundColor: selected.color }}
-            />
+            <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ backgroundColor: selected.color }} />
             {selected.statusLabel}
           </span>
           <span className="font-mono text-sm text-muted-foreground">
-            Day {days.toLocaleString()}
+            Day {new Intl.NumberFormat("en-US").format(days)}
           </span>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          {selected.parties[0]} vs {selected.parties[1]} &mdash;{" "}
-          {selected.description}
+          {selected.parties[0]} vs {selected.parties[1]} &mdash; {selected.description}
         </p>
+
+        {/* Escalation Badge */}
+        {selected.escalation && <EscalationBadge data={selected.escalation} />}
       </FadeIn>
 
-      {/* Map + KPIs */}
+      {/* Timeline */}
+      {selected.timeline && (
+        <FadeIn delay={0.22}>
+          <div className="mt-6">
+            <ConflictTimeline
+              phases={selected.timeline.phases}
+              milestones={selected.timeline.milestones}
+              startDate={selected.startDate}
+            />
+          </div>
+        </FadeIn>
+      )}
+
+      {/* Map + Sidebar */}
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {/* Map */}
         <div className="lg:col-span-2">
@@ -227,30 +253,10 @@ export default function ConflictMonitor() {
 
             {/* Legend */}
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-muted-foreground">
-              {selected.frontLine && (
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="h-[2px] w-4 rounded"
-                    style={{
-                      backgroundColor: selected.color,
-                      opacity: 0.8,
-                    }}
-                  />
-                  Front line
-                </span>
-              )}
-              {selected.controlledAreas && (
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="h-3 w-3 rounded-sm border border-white/10"
-                    style={{
-                      backgroundColor: selected.color,
-                      opacity: 0.25,
-                    }}
-                  />
-                  Controlled territory
-                </span>
-              )}
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm border border-white/10" style={{ backgroundColor: selected.color, opacity: 0.25 }} />
+                Controlled territory
+              </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-blue-400" />
                 Capital
@@ -268,105 +274,136 @@ export default function ConflictMonitor() {
                 Event
               </span>
             </div>
-
-            {/* Active situations */}
-            {selected.recentEvents && selected.recentEvents.length > 0 && (
-              <div className="mt-5">
-                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Active Situations
-                </h4>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {selected.recentEvents.map((ev, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5"
-                    >
-                      <span
-                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor:
-                            EVENT_TYPE_COLORS[ev.type] || "#ef4444",
-                          boxShadow: `0 0 6px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}`,
-                        }}
-                      />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-semibold leading-tight">
-                            {ev.title}
-                          </p>
-                          <span
-                            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                            style={{
-                              backgroundColor:
-                                (EVENT_TYPE_COLORS[ev.type] || "#ef4444") +
-                                "18",
-                              color:
-                                EVENT_TYPE_COLORS[ev.type] || "#ef4444",
-                            }}
-                          >
-                            {EVENT_TYPE_LABELS[ev.type] || ev.type}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
-                          {ev.description}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </FadeIn>
         </div>
 
-        {/* KPIs */}
+        {/* Sidebar — tabbed KPIs / Humanitarian */}
         <div>
           <FadeIn delay={0.3}>
             <div className="rounded-xl border border-white/5 bg-white/[0.02] p-5">
-              <h3 className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <Activity size={14} />
-                Key Figures
-              </h3>
-              <div className="space-y-5">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                    Duration
-                  </p>
-                  <p className="text-2xl font-bold font-mono">
-                    {days.toLocaleString()}{" "}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      days
-                    </span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Since{" "}
-                    {new Date(selected.startDate).toLocaleDateString(
-                      "en-US",
-                      { month: "long", day: "numeric", year: "numeric" }
-                    )}
-                  </p>
+              {/* Sidebar tabs */}
+              {selected.humanitarian && (
+                <div className="mb-4 flex gap-1 rounded-lg bg-white/[0.03] p-1">
+                  {([
+                    { id: "kpis" as SidebarTab, label: "Key Figures", icon: Activity },
+                    { id: "humanitarian" as SidebarTab, label: "Humanitarian", icon: Heart },
+                  ]).map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setSidebarTab(t.id)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                        sidebarTab === t.id
+                          ? "bg-white/10 text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <t.icon size={11} />
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
+              )}
 
-                {selected.kpis.map((kpi) => (
-                  <div key={kpi.label}>
-                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                      {kpi.label}
-                    </p>
-                    <p className="text-2xl font-bold font-mono">
-                      {kpi.value}
-                    </p>
-                    {kpi.subtext && (
-                      <p className="text-[11px] text-muted-foreground">
-                        {kpi.subtext}
+              {sidebarTab === "kpis" ? (
+                <>
+                  {!selected.humanitarian && (
+                    <h3 className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <Activity size={14} />
+                      Key Figures
+                    </h3>
+                  )}
+                  <div className="space-y-5">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Duration</p>
+                      <p className="text-2xl font-bold font-mono">
+                        {new Intl.NumberFormat("en-US").format(days)}{" "}
+                        <span className="text-sm font-normal text-muted-foreground">days</span>
                       </p>
-                    )}
+                      <p className="text-[11px] text-muted-foreground">
+                        Since {new Date(selected.startDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                    {selected.kpis.map((kpi) => (
+                      <div key={kpi.label}>
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
+                        <p className="text-2xl font-bold font-mono">{kpi.value}</p>
+                        {kpi.subtext && <p className="text-[11px] text-muted-foreground">{kpi.subtext}</p>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                selected.humanitarian && <HumanitarianDashboard data={selected.humanitarian} />
+              )}
             </div>
           </FadeIn>
         </div>
       </div>
+
+      {/* Info Tabs — Situations / Actors / Diplomacy */}
+      {infoTabs.some((t) => t.available) && (
+        <FadeIn delay={0.32}>
+          <div className="mt-8">
+            {/* Tab bar */}
+            <div className="mb-4 flex gap-1 rounded-lg bg-white/[0.03] p-1 w-fit">
+              {infoTabs.filter((t) => t.available).map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-medium transition-colors ${
+                    activeTab === t.id
+                      ? "bg-white/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <t.icon size={13} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            {activeTab === "situations" && selected.recentEvents && selected.recentEvents.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {selected.recentEvents.map((ev, i) => (
+                  <div key={i} className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                    <span
+                      className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                        boxShadow: `0 0 6px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}`,
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold leading-tight">{ev.title}</p>
+                        <span
+                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{
+                            backgroundColor: (EVENT_TYPE_COLORS[ev.type] || "#ef4444") + "18",
+                            color: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                          }}
+                        >
+                          {EVENT_TYPE_LABELS[ev.type] || ev.type}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{ev.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === "actors" && selected.actors && (
+              <ActorsPanel actors={selected.actors} />
+            )}
+
+            {activeTab === "diplomacy" && selected.diplomatic && (
+              <DiplomaticTracker data={selected.diplomatic} />
+            )}
+          </div>
+        </FadeIn>
+      )}
 
       {/* News Feed */}
       <FadeIn delay={0.35}>
@@ -386,10 +423,7 @@ export default function ConflictMonitor() {
           {newsLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-20 animate-pulse rounded-xl bg-white/5"
-                />
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-white/5" />
               ))}
             </div>
           ) : filteredNews.length === 0 ? (
@@ -425,10 +459,7 @@ export default function ConflictMonitor() {
                       </p>
                     )}
                   </div>
-                  <ExternalLink
-                    size={14}
-                    className="mt-1 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100"
-                  />
+                  <ExternalLink size={14} className="mt-1 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" />
                 </a>
               ))}
             </div>
