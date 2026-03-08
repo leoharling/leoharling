@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { Crosshair, Scale, Heart, Map, Handshake } from "lucide-react";
 import type { TimelinePhase, TimelineMilestone } from "@/lib/conflicts";
 
@@ -27,17 +27,23 @@ export default function ConflictTimeline({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TimelineMilestone | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const range = useMemo(() => {
     const start = toTimestamp(startDate);
     const now = Date.now();
     return { start, end: now, span: now - start };
-  }, [startDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, mounted]);
 
   const pct = (date: string) => {
     const t = toTimestamp(date);
     return Math.max(0, Math.min(100, ((t - range.start) / range.span) * 100));
   };
+
+  if (!mounted) return <div style={{ minHeight: 80 }} />;
 
   return (
     <div>

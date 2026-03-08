@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ZoomOut, ZoomIn, ArrowLeft } from "lucide-react";
 import {
@@ -16,97 +16,321 @@ import FadeIn from "@/components/ui/FadeIn";
 
 type ViewMode = "solar-system" | "local-cluster";
 
-/* ── Planet on its orbit ── */
-function PlanetOrbit({
+/* ── Per-planet surface gradient for detailed look ── */
+const PLANET_GRADIENTS: Record<string, string[]> = {
+  Mercury: ["#8c7b6b", "#b5a18e", "#6b5d50", "#a0917e"],
+  Venus: ["#e8cda0", "#d4a853", "#c99a3a", "#f0dbb8"],
+  Earth: ["#2d6b3f", "#4a90d9", "#1a5276", "#3a7d44"],
+  Mars: ["#c1440e", "#e07040", "#8b2500", "#d4603a"],
+  Jupiter: ["#c88b3a", "#a86b20", "#e0a84c", "#b07828", "#d4a050"],
+  Saturn: ["#e4d08e", "#c8a850", "#d4bc6e", "#b89838"],
+  Uranus: ["#72b5c4", "#5a9aaa", "#88c8d8", "#4a8898"],
+  Neptune: ["#3f54ba", "#2a3d8f", "#5568d0", "#1e2d70"],
+};
+
+/* ── SVG planet rendering ── */
+function PlanetSVG({
   planet,
-  onSelect,
-  isSelected,
+  size,
+  detailed = false,
 }: {
   planet: Planet;
-  onSelect: (p: Planet) => void;
-  isSelected: boolean;
+  size: number;
+  detailed?: boolean;
 }) {
-  const orbitR = getOrbitRadius(planet.distanceAU);
-  const size = getPlanetSize(planet.radiusKm);
-  const duration = getOrbitalDuration(planet.orbitalPeriodYears);
-  const startAngle = useMemo(
-    () => Math.floor(planet.distanceAU * 137.5) % 360,
-    [planet.distanceAU]
-  );
+  const colors = PLANET_GRADIENTS[planet.name] || [planet.color, planet.color];
+  const id = `planet-${planet.name}-${detailed ? "detail" : "orbit"}`;
 
   return (
-    <>
-      {/* Orbit ring */}
-      <div
-        className="absolute left-1/2 top-1/2 rounded-full border border-white/[0.06]"
-        style={{
-          width: orbitR * 2,
-          height: orbitR * 2,
-          marginLeft: -orbitR,
-          marginTop: -orbitR,
-        }}
-      />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      className="pointer-events-none"
+    >
+      <defs>
+        {/* Base radial gradient with light source from upper-left */}
+        <radialGradient id={`${id}-base`} cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stopColor={colors[0]} stopOpacity="1" />
+          <stop offset="50%" stopColor={colors[1] || colors[0]} stopOpacity="0.9" />
+          <stop offset="100%" stopColor={colors[2] || colors[0]} stopOpacity="0.5" />
+        </radialGradient>
+        {/* Shadow on the dark side */}
+        <radialGradient id={`${id}-shadow`} cx="70%" cy="65%" r="55%">
+          <stop offset="0%" stopColor="black" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="black" stopOpacity="0" />
+        </radialGradient>
+        {/* Specular highlight */}
+        <radialGradient id={`${id}-highlight`} cx="30%" cy="28%" r="25%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="white" stopOpacity="0" />
+        </radialGradient>
+        {/* Atmosphere glow for gas giants */}
+        <radialGradient id={`${id}-atmo`} cx="50%" cy="50%" r="50%">
+          <stop offset="85%" stopColor={colors[0]} stopOpacity="0" />
+          <stop offset="100%" stopColor={colors[0]} stopOpacity="0.15" />
+        </radialGradient>
+      </defs>
 
-      {/* Rotating container — pointer-events:none so outer orbits don't block inner ones */}
-      <div
-        className="absolute left-1/2 top-1/2 pointer-events-none"
-        style={{
-          width: orbitR * 2,
-          height: orbitR * 2,
-          marginLeft: -orbitR,
-          marginTop: -orbitR,
-          animation: `spin ${duration}s linear infinite`,
-          animationDelay: `-${(startAngle / 360) * duration}s`,
-        }}
-      >
-        {/* Planet button — positioned at left edge, re-enables pointer events */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(planet);
+      {/* Atmosphere glow */}
+      <circle cx="50" cy="50" r="50" fill={`url(#${id}-atmo)`} />
+
+      {/* Planet body */}
+      <circle cx="50" cy="50" r="46" fill={`url(#${id}-base)`} />
+
+      {/* Planet-specific surface features */}
+      {planet.name === "Earth" && (
+        <>
+          {/* Continents */}
+          <ellipse cx="38" cy="40" rx="12" ry="10" fill="#3a7d44" opacity="0.5" />
+          <ellipse cx="60" cy="55" rx="8" ry="14" fill="#3a7d44" opacity="0.4" />
+          <ellipse cx="35" cy="62" rx="6" ry="5" fill="#3a7d44" opacity="0.3" />
+          {/* Ice caps */}
+          <ellipse cx="50" cy="10" rx="14" ry="5" fill="white" opacity="0.25" />
+          <ellipse cx="50" cy="90" rx="12" ry="4" fill="white" opacity="0.2" />
+        </>
+      )}
+      {planet.name === "Jupiter" && (
+        <>
+          {/* Bands */}
+          <ellipse cx="50" cy="30" rx="44" ry="4" fill="#a86b20" opacity="0.4" />
+          <ellipse cx="50" cy="42" rx="44" ry="3" fill="#d4a050" opacity="0.3" />
+          <ellipse cx="50" cy="55" rx="44" ry="5" fill="#8b5e14" opacity="0.35" />
+          <ellipse cx="50" cy="68" rx="44" ry="3" fill="#d4a050" opacity="0.3" />
+          {/* Great Red Spot */}
+          <ellipse cx="62" cy="55" rx="7" ry="5" fill="#c04020" opacity="0.6" />
+        </>
+      )}
+      {planet.name === "Saturn" && (
+        <>
+          {/* Bands */}
+          <ellipse cx="50" cy="35" rx="44" ry="3" fill="#b89838" opacity="0.3" />
+          <ellipse cx="50" cy="50" rx="44" ry="4" fill="#c8a850" opacity="0.25" />
+          <ellipse cx="50" cy="65" rx="44" ry="3" fill="#b89838" opacity="0.3" />
+        </>
+      )}
+      {planet.name === "Mars" && (
+        <>
+          {/* Polar ice cap */}
+          <ellipse cx="50" cy="10" rx="10" ry="4" fill="white" opacity="0.3" />
+          {/* Dark regions */}
+          <ellipse cx="40" cy="45" rx="10" ry="8" fill="#8b2500" opacity="0.3" />
+          <ellipse cx="65" cy="55" rx="8" ry="6" fill="#8b2500" opacity="0.25" />
+        </>
+      )}
+      {planet.name === "Venus" && (
+        <>
+          {/* Thick cloud swirls */}
+          <ellipse cx="40" cy="40" rx="20" ry="6" fill="#f0dbb8" opacity="0.3" transform="rotate(-15 40 40)" />
+          <ellipse cx="55" cy="55" rx="18" ry="5" fill="#f0dbb8" opacity="0.25" transform="rotate(10 55 55)" />
+        </>
+      )}
+      {planet.name === "Neptune" && (
+        <>
+          {/* Atmospheric bands */}
+          <ellipse cx="50" cy="38" rx="44" ry="3" fill="#5568d0" opacity="0.3" />
+          <ellipse cx="50" cy="58" rx="44" ry="4" fill="#5568d0" opacity="0.25" />
+          {/* Great Dark Spot */}
+          <ellipse cx="38" cy="45" rx="6" ry="5" fill="#1e2d70" opacity="0.4" />
+        </>
+      )}
+      {planet.name === "Uranus" && (
+        <>
+          {/* Subtle banding */}
+          <ellipse cx="50" cy="40" rx="44" ry="5" fill="#88c8d8" opacity="0.2" />
+          <ellipse cx="50" cy="60" rx="44" ry="4" fill="#5a9aaa" opacity="0.2" />
+        </>
+      )}
+      {planet.name === "Mercury" && (
+        <>
+          {/* Craters */}
+          <circle cx="35" cy="35" r="5" fill="#6b5d50" opacity="0.3" />
+          <circle cx="58" cy="48" r="4" fill="#6b5d50" opacity="0.25" />
+          <circle cx="42" cy="62" r="6" fill="#6b5d50" opacity="0.2" />
+          <circle cx="62" cy="30" r="3" fill="#6b5d50" opacity="0.3" />
+        </>
+      )}
+
+      {/* Shadow overlay */}
+      <circle cx="50" cy="50" r="46" fill={`url(#${id}-shadow)`} />
+      {/* Specular highlight */}
+      <circle cx="50" cy="50" r="46" fill={`url(#${id}-highlight)`} />
+    </svg>
+  );
+}
+
+/* ── Ring SVG for Saturn/Uranus ── */
+function RingSVG({
+  planet,
+  size,
+}: {
+  planet: Planet;
+  size: number;
+}) {
+  if (!planet.hasRings) return null;
+
+  const isSaturn = planet.name === "Saturn";
+  const ringWidth = isSaturn ? size * 2.4 : size * 1.8;
+  const ringHeight = isSaturn ? size * 0.7 : size * 0.5;
+  // Uranus is tilted ~98 degrees
+  const tilt = planet.name === "Uranus" ? 82 : 0;
+
+  return (
+    <svg
+      width={ringWidth}
+      height={ringHeight}
+      viewBox={`0 0 ${ringWidth} ${ringHeight}`}
+      className="absolute left-1/2 top-1/2 pointer-events-none"
+      style={{
+        marginLeft: -ringWidth / 2,
+        marginTop: -ringHeight / 2,
+        transform: `rotate(${tilt}deg)`,
+      }}
+    >
+      <defs>
+        <linearGradient id={`ring-${planet.name}`} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor={planet.color} stopOpacity="0.05" />
+          <stop offset="20%" stopColor={planet.color} stopOpacity="0.3" />
+          <stop offset="50%" stopColor={planet.color} stopOpacity="0.4" />
+          <stop offset="80%" stopColor={planet.color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={planet.color} stopOpacity="0.05" />
+        </linearGradient>
+      </defs>
+      {/* Multiple ring bands */}
+      {isSaturn ? (
+        <>
+          <ellipse cx={ringWidth / 2} cy={ringHeight / 2} rx={ringWidth * 0.46} ry={ringHeight * 0.46}
+            fill="none" stroke={`url(#ring-${planet.name})`} strokeWidth={ringWidth * 0.04} />
+          <ellipse cx={ringWidth / 2} cy={ringHeight / 2} rx={ringWidth * 0.40} ry={ringHeight * 0.40}
+            fill="none" stroke={planet.color} strokeWidth={ringWidth * 0.02} opacity="0.2" />
+          <ellipse cx={ringWidth / 2} cy={ringHeight / 2} rx={ringWidth * 0.36} ry={ringHeight * 0.36}
+            fill="none" stroke={`url(#ring-${planet.name})`} strokeWidth={ringWidth * 0.05} />
+          <ellipse cx={ringWidth / 2} cy={ringHeight / 2} rx={ringWidth * 0.30} ry={ringHeight * 0.30}
+            fill="none" stroke={planet.color} strokeWidth={ringWidth * 0.01} opacity="0.15" />
+        </>
+      ) : (
+        <>
+          <ellipse cx={ringWidth / 2} cy={ringHeight / 2} rx={ringWidth * 0.44} ry={ringHeight * 0.44}
+            fill="none" stroke={planet.color} strokeWidth={ringWidth * 0.02} opacity="0.2" />
+          <ellipse cx={ringWidth / 2} cy={ringHeight / 2} rx={ringWidth * 0.38} ry={ringHeight * 0.38}
+            fill="none" stroke={planet.color} strokeWidth={ringWidth * 0.015} opacity="0.15" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/* ── Orbiting planets — uses RAF for position, no rotating wrappers ── */
+function SolarSystemView({
+  onSelectPlanet,
+  selectedPlanet,
+}: {
+  onSelectPlanet: (p: Planet) => void;
+  selectedPlanet: Planet | null;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [positions, setPositions] = useState<
+    { x: number; y: number; angle: number }[]
+  >(() => PLANETS.map(() => ({ x: 0, y: 0, angle: 0 })));
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    const startAngles = PLANETS.map(
+      (p) => ((p.distanceAU * 137.5) % 360) * (Math.PI / 180)
+    );
+    const durations = PLANETS.map((p) =>
+      getOrbitalDuration(p.orbitalPeriodYears)
+    );
+    const radii = PLANETS.map((p) => getOrbitRadius(p.distanceAU));
+    const startTime = performance.now();
+
+    function tick(now: number) {
+      const elapsed = (now - startTime) / 1000;
+      const next = PLANETS.map((_, i) => {
+        const angle =
+          startAngles[i] + (elapsed / durations[i]) * Math.PI * 2;
+        return {
+          x: Math.cos(angle) * radii[i],
+          y: Math.sin(angle) * radii[i],
+          angle,
+        };
+      });
+      setPositions(next);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="absolute inset-0">
+      {/* Sun */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+        <div
+          className="h-8 w-8 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, #fef3c7 0%, #f59e0b 40%, #d97706 100%)",
+            boxShadow:
+              "0 0 30px 10px rgba(245, 158, 11, 0.3), 0 0 60px 20px rgba(245, 158, 11, 0.1)",
           }}
-          className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 group cursor-pointer pointer-events-auto"
-          style={{ padding: 14, zIndex: 5 }}
-        >
-          <div className="relative">
-            <div
-              className="rounded-full transition-shadow duration-200"
-              style={{
-                width: size,
-                height: size,
-                backgroundColor: planet.color,
-                boxShadow: isSelected
-                  ? `0 0 18px 6px ${planet.color}80`
-                  : `0 0 8px 2px ${planet.color}40`,
-              }}
-            />
-            {planet.hasRings && (
-              <div
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border opacity-40"
-                style={{
-                  width: size * 2.2,
-                  height: size * 0.8,
-                  borderColor: planet.color,
-                }}
-              />
-            )}
-          </div>
+        />
+      </div>
 
-          {/* Label — hidden by default, visible on hover, counter-rotates to stay upright */}
+      {/* Orbit rings */}
+      {PLANETS.map((planet) => {
+        const orbitR = getOrbitRadius(planet.distanceAU);
+        return (
           <div
-            className="absolute top-full left-1/2 -translate-x-1/2 mt-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            key={`orbit-${planet.name}`}
+            className="absolute left-1/2 top-1/2 rounded-full border border-white/[0.06] pointer-events-none"
             style={{
-              animation: `spin ${duration}s linear infinite reverse`,
-              animationDelay: `-${(startAngle / 360) * duration}s`,
+              width: orbitR * 2,
+              height: orbitR * 2,
+              marginLeft: -orbitR,
+              marginTop: -orbitR,
+            }}
+          />
+        );
+      })}
+
+      {/* Planet buttons — absolutely positioned via RAF positions */}
+      {PLANETS.map((planet, i) => {
+        const size = getPlanetSize(planet.radiusKm);
+        const ringExtra = planet.hasRings ? size * 0.8 : 0;
+        const pos = positions[i];
+        return (
+          <button
+            key={planet.name}
+            onClick={() => onSelectPlanet(planet)}
+            className="absolute group cursor-pointer"
+            style={{
+              left: "50%",
+              top: "50%",
+              transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
+              zIndex: selectedPlanet?.name === planet.name ? 15 : 5,
+              padding: 6,
             }}
           >
-            <span className="text-[10px] font-medium text-foreground/70">
+            <div className="relative flex items-center justify-center">
+              <PlanetSVG planet={planet} size={size + ringExtra} />
+              {planet.hasRings && <RingSVG planet={planet} size={size} />}
+            </div>
+            {/* Label — hover to show, like stars */}
+            <span
+              className={`absolute top-full left-1/2 -translate-x-1/2 mt-1 whitespace-nowrap text-[10px] font-medium transition-opacity duration-200 ${
+                selectedPlanet?.name === planet.name
+                  ? "opacity-100 text-foreground"
+                  : "opacity-0 group-hover:opacity-100 text-foreground/70"
+              }`}
+            >
               {planet.name}
             </span>
-          </div>
-        </button>
-      </div>
-    </>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -170,7 +394,7 @@ function StarDot({
   );
 }
 
-/* ── Star info panel (overlay, same as before) ── */
+/* ── Star info panel ── */
 function StarInfoPanel({
   star,
   onClose,
@@ -187,9 +411,7 @@ function StarInfoPanel({
     >
       <div className="flex items-start justify-between mb-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">
-            {star.name}
-          </h3>
+          <h3 className="text-sm font-semibold text-foreground">{star.name}</h3>
           <p className="text-[11px] text-muted-foreground">
             {star.spectralType}
           </p>
@@ -236,7 +458,7 @@ function PlanetDetailView({
   planet: Planet;
   onClose: () => void;
 }) {
-  const displaySize = Math.min(220, 80 + Math.sqrt(planet.radiusKm / 50));
+  const displaySize = Math.min(240, 100 + Math.sqrt(planet.radiusKm / 40));
 
   return (
     <motion.div
@@ -255,54 +477,15 @@ function PlanetDetailView({
         Back
       </button>
 
-      {/* Planet sphere — left side */}
+      {/* Planet — left side */}
       <motion.div
         className="relative shrink-0 flex items-center justify-center"
         initial={{ scale: 0.2, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
       >
-        <div
-          className="rounded-full relative"
-          style={{
-            width: displaySize,
-            height: displaySize,
-            background: `radial-gradient(circle at 35% 35%, ${planet.color}ee, ${planet.color}88 50%, ${planet.color}33 100%)`,
-            boxShadow: `0 0 60px 15px ${planet.color}30, inset -${displaySize * 0.15}px -${displaySize * 0.05}px ${displaySize * 0.3}px ${planet.color}20`,
-          }}
-        >
-          {/* Subtle surface texture */}
-          <div
-            className="absolute inset-0 rounded-full opacity-20"
-            style={{
-              background: `radial-gradient(ellipse at 60% 40%, transparent 40%, rgba(0,0,0,0.4) 100%)`,
-            }}
-          />
-          {/* Highlight */}
-          <div
-            className="absolute rounded-full opacity-30"
-            style={{
-              width: displaySize * 0.25,
-              height: displaySize * 0.2,
-              top: "15%",
-              left: "20%",
-              background: `radial-gradient(ellipse, rgba(255,255,255,0.6), transparent)`,
-              filter: "blur(4px)",
-            }}
-          />
-        </div>
-        {/* Rings for Saturn / Uranus */}
-        {planet.hasRings && (
-          <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 opacity-30 pointer-events-none"
-            style={{
-              width: displaySize * 1.8,
-              height: displaySize * 0.5,
-              borderColor: planet.color,
-              boxShadow: `0 0 12px 2px ${planet.color}20`,
-            }}
-          />
-        )}
+        <PlanetSVG planet={planet} size={displaySize} detailed />
+        {planet.hasRings && <RingSVG planet={planet} size={displaySize * 0.75} />}
         {/* Name below */}
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-sm font-semibold text-foreground whitespace-nowrap">
           {planet.name}
@@ -460,31 +643,13 @@ export default function DeepSpaceView() {
               pointerEvents: viewMode === "solar-system" ? "auto" : "none",
             }}
           >
-            {/* Sun */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-              <div
-                className="h-7 w-7 rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle, #fef3c7 0%, #f59e0b 40%, #d97706 100%)",
-                  boxShadow:
-                    "0 0 30px 10px rgba(245, 158, 11, 0.3), 0 0 60px 20px rgba(245, 158, 11, 0.1)",
-                }}
-              />
-            </div>
-
-            {/* Planets */}
-            {PLANETS.map((planet) => (
-              <PlanetOrbit
-                key={planet.name}
-                planet={planet}
-                onSelect={(p) => {
-                  setSelectedStar(null);
-                  setSelectedPlanet(p);
-                }}
-                isSelected={selectedPlanet?.name === planet.name}
-              />
-            ))}
+            <SolarSystemView
+              onSelectPlanet={(p) => {
+                setSelectedStar(null);
+                setSelectedPlanet(p);
+              }}
+              selectedPlanet={selectedPlanet}
+            />
           </motion.div>
 
           {/* Local Cluster view */}
@@ -557,7 +722,7 @@ export default function DeepSpaceView() {
             ))}
           </motion.div>
 
-          {/* Star info panel (for local cluster) */}
+          {/* Star info panel */}
           <AnimatePresence>
             {selectedStar && (
               <StarInfoPanel
@@ -567,7 +732,7 @@ export default function DeepSpaceView() {
             )}
           </AnimatePresence>
 
-          {/* Planet detail view (zoom-in overlay) */}
+          {/* Planet detail view */}
           <AnimatePresence>
             {selectedPlanet && (
               <PlanetDetailView

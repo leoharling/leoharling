@@ -195,7 +195,7 @@ function MapDot({
   const hitSize = Math.max(size + 20, 28);
 
   return (
-    <Marker longitude={lng} latitude={lat} anchor="center">
+    <Marker longitude={lng} latitude={lat} anchor="center" style={hovered ? { zIndex: 50 } : undefined}>
       <div
         className="cmap-event-marker"
         onMouseEnter={() => setHovered(true)}
@@ -243,13 +243,35 @@ function MapDot({
 }
 
 /* ── Fly-to controller ── */
-function FlyToController({ center, zoom }: { center: [number, number]; zoom: number }) {
+function FlyToController({ conflictCenter, conflictZoom, focusLocation, onFocused }: {
+  conflictCenter: [number, number];
+  conflictZoom: number;
+  focusLocation?: { lat: number; lng: number } | null;
+  onFocused?: () => void;
+}) {
   const { current: map } = useMap();
+  const prevConflictCenter = useRef(conflictCenter);
+
+  // Fly to conflict center only when the conflict changes
   useEffect(() => {
-    if (map) {
-      map.flyTo({ center: [center[1], center[0]], zoom, duration: 1500 });
+    if (map && (prevConflictCenter.current[0] !== conflictCenter[0] || prevConflictCenter.current[1] !== conflictCenter[1])) {
+      map.flyTo({ center: [conflictCenter[1], conflictCenter[0]], zoom: conflictZoom, duration: 1500 });
     }
-  }, [center, zoom, map]);
+    prevConflictCenter.current = conflictCenter;
+  }, [conflictCenter, conflictZoom, map]);
+
+  // Fly to focused location, then clear it so the user can freely navigate
+  useEffect(() => {
+    if (map && focusLocation) {
+      const zoom = Math.max(conflictZoom + 2, 8);
+      map.flyTo({ center: [focusLocation.lng, focusLocation.lat], zoom, duration: 1500 });
+      if (onFocused) {
+        const handler = () => { onFocused(); map.off("moveend", handler); };
+        map.on("moveend", handler);
+      }
+    }
+  }, [focusLocation, map, conflictZoom, onFocused]);
+
   return null;
 }
 
@@ -258,10 +280,14 @@ export default function ConflictMap({
   conflict,
   allConflicts,
   onSelectConflict,
+  focusLocation,
+  onFocused,
 }: {
   conflict: Conflict;
   allConflicts: Conflict[];
   onSelectConflict: (id: string) => void;
+  focusLocation?: { lat: number; lng: number } | null;
+  onFocused?: () => void;
 }) {
   const mapRef = useRef<MapRef>(null);
   const [popup, setPopup] = useState<{
@@ -390,7 +416,12 @@ export default function ConflictMap({
         onMouseMove={onMapMouseMove}
         onMouseLeave={() => setPopup(null)}
       >
-        <FlyToController center={conflict.center} zoom={conflict.zoom} />
+        <FlyToController
+          conflictCenter={conflict.center}
+          conflictZoom={conflict.zoom}
+          focusLocation={focusLocation}
+          onFocused={onFocused}
+        />
 
         {/* ── 1. Country boundaries ── */}
         <Source id="countries" type="geojson" data={countryData}>

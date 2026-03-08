@@ -42,6 +42,7 @@ const KEYWORDS: Record<string, string[]> = {
   ],
   sudan: ["sudan", "khartoum", "darfur", "rsf", "rapid support"],
   myanmar: ["myanmar", "burma", "junta", "tatmadaw"],
+  drc: ["congo", "goma", "m23", "kivu", "fardc", "monusco", "tshisekedi", "kagame"],
 };
 
 let cache: { data: unknown; timestamp: number } | null = null;

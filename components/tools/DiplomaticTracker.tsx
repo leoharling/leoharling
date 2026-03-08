@@ -35,7 +35,7 @@ export default function DiplomaticTracker({ data }: { data: DiplomaticLandscape 
 
       {/* Entries */}
       <div className="space-y-1.5">
-        {data.entries.map((e, i) => {
+        {[...data.entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((e, i) => {
           const Icon = TYPE_ICONS[e.type] || MessageSquare;
           return (
             <div key={i} className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">

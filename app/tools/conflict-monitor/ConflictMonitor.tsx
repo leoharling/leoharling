@@ -81,6 +81,7 @@ export default function ConflictMonitor() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<InfoTab>("situations");
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("kpis");
+  const [focusLocation, setFocusLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const selected = useMemo(
     () => conflicts.find((c) => c.id === selectedId)!,
@@ -91,6 +92,7 @@ export default function ConflictMonitor() {
   useEffect(() => {
     setActiveTab("situations");
     setSidebarTab("kpis");
+    setFocusLocation(null);
   }, [selectedId]);
 
   const fetchNews = useCallback(async (showRefresh = false) => {
@@ -123,8 +125,8 @@ export default function ConflictMonitor() {
 
   const globalStats = [
     { label: "Active Conflicts", value: String(conflicts.length) },
-    { label: "Countries Affected", value: "15+" },
-    { label: "People Displaced", value: "~26M" },
+    { label: "Countries Affected", value: "20+" },
+    { label: "People Displaced", value: "~35M" },
     { label: "Status", value: "Live" },
   ];
 
@@ -248,6 +250,8 @@ export default function ConflictMonitor() {
                 conflict={selected}
                 allConflicts={conflicts}
                 onSelectConflict={setSelectedId}
+                focusLocation={focusLocation}
+                onFocused={() => setFocusLocation(null)}
               />
             </div>
 
@@ -365,32 +369,43 @@ export default function ConflictMonitor() {
             {/* Tab content */}
             {activeTab === "situations" && selected.recentEvents && selected.recentEvents.length > 0 && (
               <div className="grid gap-2 sm:grid-cols-2">
-                {selected.recentEvents.map((ev, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
-                    <span
-                      className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                      style={{
-                        backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
-                        boxShadow: `0 0 6px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}`,
+                {selected.recentEvents.map((ev, i) => {
+                  const isActive = focusLocation?.lat === ev.lat && focusLocation?.lng === ev.lng;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setFocusLocation({ lat: ev.lat, lng: ev.lng });
                       }}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold leading-tight">{ev.title}</p>
-                        <span
-                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                          style={{
-                            backgroundColor: (EVENT_TYPE_COLORS[ev.type] || "#ef4444") + "18",
-                            color: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
-                          }}
-                        >
-                          {EVENT_TYPE_LABELS[ev.type] || ev.type}
-                        </span>
+                      className={`flex items-start gap-3 rounded-lg border bg-white/[0.02] px-3 py-2.5 text-left transition-all hover:bg-white/[0.05] ${
+                        isActive ? "border-white/20 bg-white/[0.04]" : "border-white/5"
+                      }`}
+                    >
+                      <span
+                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                          boxShadow: `0 0 6px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}`,
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold leading-tight">{ev.title}</p>
+                          <span
+                            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                            style={{
+                              backgroundColor: (EVENT_TYPE_COLORS[ev.type] || "#ef4444") + "18",
+                              color: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                            }}
+                          >
+                            {EVENT_TYPE_LABELS[ev.type] || ev.type}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{ev.description}</p>
                       </div>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{ev.description}</p>
-                    </div>
-                  </div>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
 

@@ -148,7 +148,7 @@ export const conflicts: Conflict[] = [
     center: [48.5, 36.5],
     zoom: 6,
     color: "#ef4444",
-    countryCodes: ["804", "643"], // Ukraine, Russia
+    countryCodes: ["804"], // Ukraine only — Russia's polygon spans entire map and causes rendering artifacts
     kpis: [
       {
         label: "Est. Military Casualties",
@@ -364,12 +364,12 @@ export const conflicts: Conflict[] = [
     kpis: [
       {
         label: "Deaths in Gaza",
-        value: "45,000+",
+        value: "75,000+",
         subtext: "Gaza Health Ministry",
       },
       {
-        label: "Israeli Deaths (Oct 7)",
-        value: "1,200",
+        label: "Israeli Deaths (incl. Oct 7)",
+        value: "2,000+",
         subtext: "Israeli government",
       },
       {
@@ -644,12 +644,12 @@ export const conflicts: Conflict[] = [
     kpis: [
       {
         label: "Est. Deaths",
-        value: "15,000+",
-        subtext: "Armed Conflict Location data",
+        value: "150,000–400,000",
+        subtext: "Estimates vary widely; official count far lower",
       },
       {
         label: "Displaced",
-        value: "8M+",
+        value: "12.5M+",
         subtext: "Largest displacement crisis globally",
       },
       {
@@ -659,8 +659,8 @@ export const conflicts: Conflict[] = [
       },
       {
         label: "Refugees",
-        value: "1.5M+",
-        subtext: "Fled to neighboring countries",
+        value: "3.5M+",
+        subtext: "Fled to Chad, Ethiopia, South Sudan, Egypt",
       },
     ],
     recentEvents: [
@@ -1033,6 +1033,168 @@ export const conflicts: Conflict[] = [
         { type: "negotiation", date: "2021-04-24", title: "ASEAN Five-Point Consensus", detail: "Junta failed to implement any commitments.", actors: ["ASEAN"], status: "failed" },
         { type: "sanction", date: "2025-08-01", title: "US 40% Tariff on Myanmar", detail: "Added economic pressure; also banned entry of Myanmar nationals.", actors: ["US"], status: "active" },
         { type: "statement", date: "2026-01-26", title: "Rejection of Sham Elections", detail: "UN and Western governments condemned elections as illegitimate.", actors: ["UN", "US", "EU"], status: "active" },
+      ],
+    },
+  },
+  {
+    id: "drc",
+    name: "Eastern DRC / M23 Conflict",
+    shortName: "DRC",
+    parties: ["DR Congo (FARDC)", "M23 / Rwanda"],
+    startDate: "2021-11-01",
+    status: "active-combat",
+    statusLabel: "Active Combat",
+    description:
+      "Rwanda-backed M23 rebels have seized large swathes of eastern DRC, capturing Goma in early 2025 and triggering a massive humanitarian crisis.",
+    center: [-1.7, 29.0],
+    zoom: 8,
+    color: "#10b981",
+    countryCodes: ["180", "646", "800", "108"], // DRC, Rwanda, Uganda, Burundi
+    kpis: [
+      {
+        label: "Est. Deaths",
+        value: "10,000+",
+        subtext: "Since M23 resurgence",
+      },
+      {
+        label: "Displaced",
+        value: "7M+",
+        subtext: "Largest in Africa after Sudan",
+      },
+      {
+        label: "Refugees",
+        value: "1M+",
+        subtext: "Fled to Uganda, Burundi, Tanzania",
+      },
+      {
+        label: "M23 Territory",
+        value: "Expanding",
+        subtext: "Goma captured Jan 2025",
+      },
+    ],
+    recentEvents: [
+      { lat: -1.68, lng: 29.22, title: "Fall of Goma", description: "M23 captured provincial capital of 2M people", type: "battle", date: "Jan 2025" },
+      { lat: -2.52, lng: 28.86, title: "Bukavu threatened", description: "M23 advancing toward South Kivu capital", type: "battle", date: "Feb 2025" },
+      { lat: -1.68, lng: 29.22, title: "Goma humanitarian crisis", description: "1.5M displaced in and around Goma; aid access severely limited", type: "humanitarian" },
+      { lat: -1.41, lng: 29.36, title: "Gisenyi border", description: "Rwanda accused of direct military involvement across border", type: "political" },
+      { lat: -1.95, lng: 28.85, title: "Minova clashes", description: "FARDC attempting to hold defensive lines south of Goma", type: "battle" },
+      { lat: -0.78, lng: 29.53, title: "Rutshuru territory", description: "Under M23 control since late 2023", type: "battle" },
+      { lat: -1.25, lng: 29.3, title: "Sake displacement", description: "Mass displacement along Goma-Sake corridor", type: "humanitarian" },
+    ],
+    regionLabels: [
+      { lat: -1.5, lng: 28.5, text: "NORTH KIVU" },
+      { lat: -2.8, lng: 28.5, text: "SOUTH KIVU" },
+      { lat: -1.0, lng: 30.0, text: "RWANDA", fontSize: 10 },
+    ],
+    keyLocations: [
+      {
+        name: "Goma",
+        lat: -1.68,
+        lng: 29.22,
+        description: "Provincial capital, captured by M23 Jan 2025",
+        type: "hotspot",
+      },
+      {
+        name: "Bukavu",
+        lat: -2.52,
+        lng: 28.86,
+        description: "South Kivu capital, under threat",
+        type: "city",
+      },
+      {
+        name: "Kigali",
+        lat: -1.94,
+        lng: 30.06,
+        description: "Capital of Rwanda, accused of backing M23",
+        type: "capital",
+      },
+      {
+        name: "Rutshuru",
+        lat: -1.19,
+        lng: 29.45,
+        description: "Under M23 control",
+        type: "hotspot",
+      },
+      {
+        name: "Sake",
+        lat: -1.57,
+        lng: 29.04,
+        description: "Strategic town west of Goma",
+        type: "event",
+      },
+      {
+        name: "Minova",
+        lat: -1.95,
+        lng: 28.85,
+        description: "FARDC defensive position",
+        type: "event",
+      },
+      {
+        name: "Kinshasa",
+        lat: -4.32,
+        lng: 15.31,
+        description: "DRC capital, ~1,600km from conflict zone",
+        type: "capital",
+      },
+    ],
+    timeline: {
+      phases: [
+        { id: "drc-1", label: "M23 Resurgence", startDate: "2021-11-01", endDate: "2023-03-07", description: "M23 re-emerged after years of dormancy, capturing Bunagana.", escalationLevel: 3 },
+        { id: "drc-2", label: "Ceasefire & Violations", startDate: "2023-03-08", endDate: "2024-07-31", description: "Multiple ceasefires agreed and broken; M23 continued expansion.", escalationLevel: 4 },
+        { id: "drc-3", label: "Major Escalation", startDate: "2024-08-01", endDate: "2025-01-26", description: "M23 launched offensive toward Goma with Rwandan military support.", escalationLevel: 5 },
+        { id: "drc-4", label: "Fall of Goma & Regional Crisis", startDate: "2025-01-27", description: "M23 captured Goma; DRC severed ties with Rwanda; regional war fears.", escalationLevel: 5 },
+      ],
+      milestones: [
+        { date: "2022-06-13", title: "M23 Captures Bunagana", description: "Border town fell, signaling full-scale M23 return.", phase: "drc-1", category: "military", significance: "major" },
+        { date: "2023-03-08", title: "EAC Ceasefire", description: "East African Community brokered ceasefire; repeatedly violated.", phase: "drc-2", category: "diplomatic", significance: "moderate" },
+        { date: "2024-02-25", title: "MONUSCO Withdrawal Begins", description: "UN peacekeeping mission started pullout after DRC demanded exit.", phase: "drc-2", category: "political", significance: "major" },
+        { date: "2025-01-27", title: "M23 Captures Goma", description: "Provincial capital of 2M people fell; hundreds killed in assault.", phase: "drc-4", category: "military", significance: "major" },
+        { date: "2025-02-01", title: "DRC Severs Ties with Rwanda", description: "Diplomatic relations broken; DRC accused Rwanda of act of war.", phase: "drc-4", category: "diplomatic", significance: "major" },
+        { date: "2025-02-16", title: "US-Brokered Ceasefire", description: "Ceasefire agreed but violations reported within hours.", phase: "drc-4", category: "diplomatic", significance: "major" },
+      ],
+    },
+    escalation: {
+      level: "critical",
+      trend: "escalating",
+      lastAssessed: "2026-03-01",
+      summary: "M23 controls Goma and expanding south. Risk of full DRC-Rwanda interstate war. 7M+ displaced.",
+      factors: [
+        { label: "Rwandan involvement", direction: "up", detail: "UN experts documented direct RDF troop deployments" },
+        { label: "M23 territorial expansion", direction: "up", detail: "Goma captured; advancing toward Bukavu" },
+        { label: "Humanitarian catastrophe", direction: "up", detail: "7M+ displaced; cholera and measles outbreaks" },
+        { label: "MONUSCO withdrawal", direction: "up", detail: "UN peacekeepers leaving as violence escalates" },
+        { label: "Regional diplomacy", direction: "stable", detail: "Multiple ceasefires agreed but none hold" },
+      ],
+    },
+    actors: [
+      { name: "FARDC", type: "state", side: "DRC Government", objectives: "Retake lost territory and defend sovereignty against Rwanda-backed M23.", backedBy: ["Burundi", "SADC"], strength: "~120,000 eastern troops; Wazalendo militia allies" },
+      { name: "M23", type: "non-state", side: "Rwanda-backed Rebels", objectives: "Establish political control over eastern DRC's mineral-rich regions.", backedBy: ["Rwanda"], strength: "~4,000-6,000 fighters + Rwandan military support" },
+      { name: "Rwanda (RDF)", type: "state", side: "Rwanda-backed Rebels", objectives: "Secure border, control mineral supply chains, maintain strategic influence.", strength: "3,000-4,000 troops deployed per UN reports" },
+      { name: "Wazalendo Militias", type: "non-state", side: "DRC Government", objectives: "Defend communities and territory against M23.", strength: "Loosely coordinated local defense forces" },
+      { name: "MONUSCO", type: "international-org", side: "Peacekeepers", objectives: "Protect civilians and support peace process.", strength: "Withdrawing; ~12,000 personnel remaining" },
+    ],
+    humanitarian: {
+      casualties: {
+        military: { value: "Unknown", subtext: "Neither side discloses losses" },
+        civilian: { value: "10,000+", subtext: "Thousands killed in M23 offensives and ethnic violence" },
+      },
+      displacement: {
+        internal: { value: "7M+", subtext: "Eastern DRC, largest concentration around Goma" },
+        refugees: { value: "1M+", subtext: "In Uganda, Burundi, Tanzania" },
+      },
+      foodSecurity: { value: "25.6M", subtext: "Half of eastern DRC population food insecure", severity: "emergency" },
+      aidAccess: { status: "restricted", detail: "M23 controls key routes; active fighting blocks humanitarian corridors." },
+      lastUpdated: "Feb 2026",
+    },
+    diplomatic: {
+      peaceStatus: { label: "Ceasefire Broken", detail: "Multiple ceasefires agreed and violated. DRC severed diplomatic ties with Rwanda.", lastTalkDate: "2025-02-16" },
+      entries: [
+        { type: "negotiation", date: "2022-11-23", title: "Luanda Agreement", detail: "Angola-mediated ceasefire; M23 violated it within weeks.", actors: ["Angola", "DRC", "Rwanda"], status: "failed" },
+        { type: "ceasefire-attempt", date: "2023-03-08", title: "EAC Ceasefire", detail: "East African Community brokered pause; never fully implemented.", actors: ["EAC", "DRC"], status: "failed" },
+        { type: "un-action", date: "2024-02-25", title: "MONUSCO Withdrawal Begins", detail: "DRC demanded exit of UN peacekeepers; drawdown started.", actors: ["UN", "DRC"], status: "active" },
+        { type: "statement", date: "2025-02-01", title: "DRC Severs Ties with Rwanda", detail: "Diplomatic relations broken; DRC accused Rwanda of invasion.", actors: ["DRC", "Rwanda"], status: "active" },
+        { type: "ceasefire-attempt", date: "2025-02-16", title: "US-Brokered Ceasefire", detail: "Agreed after US pressure but violated within hours by M23.", actors: ["US", "DRC", "Rwanda"], status: "failed" },
+        { type: "sanction", date: "2025-03-01", title: "US & EU Sanctions on Rwanda", detail: "Targeted sanctions on Rwandan military officials; aid suspended.", actors: ["US", "EU"], status: "active" },
       ],
     },
   },
