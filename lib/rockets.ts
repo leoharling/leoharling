@@ -5,6 +5,31 @@ export type RocketCategory =
   | "small"
   | "historical";
 
+export type RocketOverridable = Pick<
+  Rocket,
+  | "fullName"
+  | "description"
+  | "heightM"
+  | "diameterM"
+  | "massKg"
+  | "payloadLeoKg"
+  | "payloadGtoKg"
+  | "thrustKn"
+  | "stages"
+  | "costPerLaunchUsd"
+  | "reusable"
+  | "maidenFlight"
+  | "status"
+  | "engines"
+  | "propellant"
+>;
+
+export interface RocketVariant {
+  id: string;
+  name: string;
+  overrides: Partial<RocketOverridable>;
+}
+
 export interface Rocket {
   id: string;
   name: string;
@@ -30,6 +55,14 @@ export interface Rocket {
   failedLaunches: number;
   propellant: string;
   engines: string;
+  variants?: RocketVariant[];
+}
+
+export function resolveVariant(rocket: Rocket, variantId?: string): Rocket {
+  if (!variantId || !rocket.variants) return rocket;
+  const variant = rocket.variants.find((v) => v.id === variantId);
+  if (!variant) return rocket;
+  return { ...rocket, ...variant.overrides };
 }
 
 export const CATEGORY_LABELS: Record<RocketCategory, string> = {
@@ -69,7 +102,49 @@ export const ROCKETS: Rocket[] = [
     successfulLaunches: 4,
     failedLaunches: 2,
     propellant: "CH4 / LOX (Methalox)",
-    engines: "33x Raptor (booster) + 6x Raptor (ship)",
+    engines: "33x Raptor 2 (booster) + 6x Raptor 2 (ship)",
+    variants: [
+      {
+        id: "block-1",
+        name: "Block 1 (Current)",
+        overrides: {},
+      },
+      {
+        id: "block-2",
+        name: "Block 2",
+        overrides: {
+          fullName: "Starship Block 2 / Super Heavy",
+          description:
+            "The upgraded Starship with Raptor 3 engines offering higher thrust and efficiency, a stretched ship tank section, and improved heat shield. Targeting significantly higher payload to orbit with full reusability.",
+          heightM: 124,
+          massKg: 5200000,
+          payloadLeoKg: 200000,
+          payloadGtoKg: 28000,
+          thrustKn: 82000,
+          costPerLaunchUsd: 50_000_000,
+          engines: "33x Raptor 3 (booster) + 6x Raptor 3 (ship)",
+          status: "in-development",
+        },
+      },
+      {
+        id: "block-3",
+        name: "Block 3",
+        overrides: {
+          fullName: "Starship Block 3 / Super Heavy",
+          description:
+            "The future ultra-heavy variant with a significantly enlarged vehicle, targeting unprecedented payload capacity. Intended for large-scale Mars colonisation infrastructure and deep-space missions.",
+          heightM: 150,
+          diameterM: 12,
+          massKg: 9000000,
+          payloadLeoKg: 300000,
+          payloadGtoKg: 50000,
+          thrustKn: 120000,
+          costPerLaunchUsd: null,
+          engines: "TBD (next-gen Raptor)",
+          status: "in-development",
+        },
+      },
+    ],
   },
   {
     id: "sls",
@@ -97,6 +172,45 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 0,
     propellant: "LH2 / LOX + Solid boosters",
     engines: "4x RS-25 + 2x 5-seg SRB + 1x RL-10 (ICPS)",
+    variants: [
+      {
+        id: "block-1",
+        name: "Block 1 (Current)",
+        overrides: {},
+      },
+      {
+        id: "block-1b",
+        name: "Block 1B",
+        overrides: {
+          fullName: "Space Launch System Block 1B",
+          description:
+            "The upgraded SLS replacing the Interim Cryogenic Propulsion Stage with the more powerful Exploration Upper Stage (EUS), featuring four RL-10C-3 engines. Enables heavier payloads to the Moon and co-manifested cargo.",
+          heightM: 111,
+          massKg: 2850000,
+          payloadLeoKg: 105000,
+          payloadGtoKg: 37000,
+          engines: "4x RS-25 + 2x 5-seg SRB + 4x RL-10C-3 (EUS)",
+          status: "in-development",
+        },
+      },
+      {
+        id: "block-2",
+        name: "Block 2",
+        overrides: {
+          fullName: "Space Launch System Block 2",
+          description:
+            "The ultimate SLS configuration with advanced liquid or solid boosters and the Exploration Upper Stage, targeting 130 tonnes to LEO for deep-space missions to Mars and beyond.",
+          heightM: 111,
+          massKg: 3200000,
+          payloadLeoKg: 130000,
+          payloadGtoKg: 45000,
+          thrustKn: 44000,
+          costPerLaunchUsd: 2_500_000_000,
+          engines: "4x RS-25 + Advanced Boosters + 4x RL-10C-3 (EUS)",
+          status: "in-development",
+        },
+      },
+    ],
   },
   {
     id: "falcon-heavy",
@@ -124,6 +238,24 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 0,
     propellant: "RP-1 / LOX",
     engines: "27x Merlin 1D + 1x Merlin Vacuum",
+    variants: [
+      {
+        id: "expendable",
+        name: "Expendable",
+        overrides: {},
+      },
+      {
+        id: "reusable",
+        name: "Reusable (All Cores)",
+        overrides: {
+          description:
+            "Falcon Heavy in fully reusable configuration with all three boosters recovered. Reduces payload capacity significantly but dramatically lowers cost per flight through hardware recovery.",
+          payloadLeoKg: 30000,
+          payloadGtoKg: 8000,
+          costPerLaunchUsd: 97_000_000,
+        },
+      },
+    ],
   },
 
   // ═══════════════════════════════════════════
@@ -155,6 +287,35 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 2,
     propellant: "RP-1 / LOX",
     engines: "9x Merlin 1D + 1x Merlin Vacuum",
+    variants: [
+      {
+        id: "expendable",
+        name: "Expendable",
+        overrides: {},
+      },
+      {
+        id: "reusable-asds",
+        name: "Reusable (Droneship)",
+        overrides: {
+          description:
+            "Falcon 9 with booster recovery on an autonomous droneship at sea. The most common flight profile, balancing payload capacity with booster reuse economics.",
+          payloadLeoKg: 15600,
+          payloadGtoKg: 5500,
+          costPerLaunchUsd: 67_000_000,
+        },
+      },
+      {
+        id: "reusable-rtls",
+        name: "Reusable (Return to Launch Site)",
+        overrides: {
+          description:
+            "Falcon 9 with booster returning to the launch site. Uses more fuel for boostback, reducing payload but enabling fastest turnaround between flights.",
+          payloadLeoKg: 11500,
+          payloadGtoKg: null,
+          costPerLaunchUsd: 67_000_000,
+        },
+      },
+    ],
   },
   {
     id: "new-glenn",
@@ -236,6 +397,43 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 0,
     propellant: "CH4 / LOX + Solid boosters",
     engines: "2x BE-4 + 1-2x RL-10C + 0-6 GEM-63XL SRBs",
+    variants: [
+      {
+        id: "vc2",
+        name: "VC2 (2 SRBs)",
+        overrides: {
+          fullName: "Vulcan Centaur VC2",
+          description:
+            "The lightest Vulcan Centaur configuration with two GEM-63XL solid rocket boosters. Suited for medium-weight government and commercial payloads.",
+          massKg: 546700,
+          payloadLeoKg: 20100,
+          payloadGtoKg: 10300,
+          thrustKn: 7600,
+          costPerLaunchUsd: 100_000_000,
+          engines: "2x BE-4 + 1x RL-10C + 2x GEM-63XL SRB",
+        },
+      },
+      {
+        id: "vc4",
+        name: "VC4 (4 SRBs)",
+        overrides: {
+          fullName: "Vulcan Centaur VC4",
+          description:
+            "Mid-configuration Vulcan Centaur with four GEM-63XL solid rocket boosters. Offers a balance of cost and performance for heavier GTO missions.",
+          massKg: 630000,
+          payloadLeoKg: 24100,
+          payloadGtoKg: 12700,
+          thrustKn: 9200,
+          costPerLaunchUsd: 105_000_000,
+          engines: "2x BE-4 + 2x RL-10C + 4x GEM-63XL SRB",
+        },
+      },
+      {
+        id: "vc6",
+        name: "VC6 (6 SRBs)",
+        overrides: {},
+      },
+    ],
   },
   {
     id: "long-march-5",
@@ -263,6 +461,28 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 1,
     propellant: "LH2 / LOX (core) + RP-1 / LOX (boosters)",
     engines: "2x YF-77 + 8x YF-100",
+    variants: [
+      {
+        id: "cz-5",
+        name: "CZ-5 (Standard)",
+        overrides: {},
+      },
+      {
+        id: "cz-5b",
+        name: "CZ-5B (LEO Direct)",
+        overrides: {
+          fullName: "Chang Zheng 5B",
+          description:
+            "A single-stage-to-LEO variant without the second stage, used for direct insertion of heavy payloads to low Earth orbit. Launched all Chinese space station modules. Notable for its uncontrolled re-entries of the large core stage.",
+          heightM: 53.7,
+          massKg: 849000,
+          payloadLeoKg: 22000,
+          payloadGtoKg: null,
+          stages: 1,
+          engines: "2x YF-77 + 8x YF-100 (single core stage)",
+        },
+      },
+    ],
   },
   {
     id: "ariane-6",
@@ -290,6 +510,28 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 0,
     propellant: "LH2 / LOX + Solid boosters",
     engines: "1x Vulcain 2.1 + 1x Vinci + 2-4x P120C SRB",
+    variants: [
+      {
+        id: "a62",
+        name: "A62 (2 Boosters)",
+        overrides: {
+          fullName: "Ariane 62",
+          description:
+            "The lighter Ariane 6 configuration with two P120C solid rocket boosters. Designed for institutional and medium-weight commercial missions, filling the gap left by Vega-C for heavier payloads.",
+          massKg: 530000,
+          payloadLeoKg: 10350,
+          payloadGtoKg: 4500,
+          thrustKn: 5400,
+          costPerLaunchUsd: 77_000_000,
+          engines: "1x Vulcain 2.1 + 1x Vinci + 2x P120C SRB",
+        },
+      },
+      {
+        id: "a64",
+        name: "A64 (4 Boosters)",
+        overrides: {},
+      },
+    ],
   },
 
   // ═══════════════════════════════════════════
@@ -321,6 +563,41 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 1,
     propellant: "RP-1 / LOX (1st) + LH2 / LOX (2nd)",
     engines: "1x RD-180 + 1-2x RL-10A + 0-5 AJ-60A SRBs",
+    variants: [
+      {
+        id: "401",
+        name: "401 (No SRBs)",
+        overrides: {
+          fullName: "Atlas V 401",
+          description:
+            "The base Atlas V configuration with no solid rocket boosters and a 4-metre fairing. The lightest and most affordable variant, used for lighter-weight government and commercial payloads.",
+          massKg: 334500,
+          payloadLeoKg: 9800,
+          payloadGtoKg: 4750,
+          thrustKn: 4152,
+          engines: "1x RD-180 + 1x RL-10A",
+        },
+      },
+      {
+        id: "541",
+        name: "541 (4 SRBs, 5m Fairing)",
+        overrides: {
+          fullName: "Atlas V 541",
+          description:
+            "A heavy-lift Atlas V configuration with four AJ-60A solid rocket boosters and a 5-metre fairing. Used for the largest national security payloads and interplanetary missions like OSIRIS-REx and Mars 2020.",
+          massKg: 569000,
+          payloadLeoKg: 17443,
+          payloadGtoKg: 8290,
+          thrustKn: 6900,
+          engines: "1x RD-180 + 1x RL-10A + 4x AJ-60A SRB",
+        },
+      },
+      {
+        id: "551",
+        name: "551 (5 SRBs, 5m Fairing)",
+        overrides: {},
+      },
+    ],
   },
   {
     id: "neutron",
@@ -402,6 +679,39 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 3,
     propellant: "RP-1 / LOX",
     engines: "4x RD-107A + 1x RD-108A + 1x RD-0124",
+    variants: [
+      {
+        id: "2-1a",
+        name: "Soyuz-2.1a",
+        overrides: {
+          fullName: "Soyuz-2.1a / Fregat",
+          description:
+            "The baseline modernised Soyuz with digital flight control and the RD-0110 third-stage engine. Used for Progress cargo ships to the ISS and lighter satellite payloads.",
+          payloadLeoKg: 7020,
+          payloadGtoKg: 2800,
+          engines: "4x RD-107A + 1x RD-108A + 1x RD-0110",
+        },
+      },
+      {
+        id: "2-1b",
+        name: "Soyuz-2.1b",
+        overrides: {},
+      },
+      {
+        id: "2-1v",
+        name: "Soyuz-2.1v (Light)",
+        overrides: {
+          fullName: "Soyuz-2.1v",
+          description:
+            "A lightweight Soyuz variant without the four strap-on boosters, using an NK-33 (later RD-193) engine on the core stage. Designed for small military payloads to low Earth orbit.",
+          massKg: 157000,
+          payloadLeoKg: 2850,
+          payloadGtoKg: null,
+          thrustKn: 1920,
+          engines: "1x RD-193 + 1x RD-0124",
+        },
+      },
+    ],
   },
   {
     id: "h3",
@@ -429,6 +739,41 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 1,
     propellant: "LH2 / LOX",
     engines: "2-3x LE-9 + 1x LE-5B-3 + 0-4 SRBs",
+    variants: [
+      {
+        id: "h3-22",
+        name: "H3-22 (2 SRBs, Short Fairing)",
+        overrides: {
+          fullName: "H3-22S",
+          description:
+            "The lightest H3 configuration with 2 LE-9 engines and 2 SRB-3 solid boosters. Designed for medium-weight government satellites with a short or long payload fairing.",
+          massKg: 420000,
+          payloadLeoKg: 4000,
+          payloadGtoKg: 3600,
+          thrustKn: 3200,
+          engines: "2x LE-9 + 1x LE-5B-3 + 2x SRB-3",
+        },
+      },
+      {
+        id: "h3-24",
+        name: "H3-24 (4 SRBs)",
+        overrides: {},
+      },
+      {
+        id: "h3-30",
+        name: "H3-30 (3 Engines, No SRBs)",
+        overrides: {
+          fullName: "H3-30",
+          description:
+            "The boosterless H3 configuration with 3 LE-9 engines and no solid rocket boosters. Optimised for heavy Sun-synchronous orbit missions and bulk LEO payloads.",
+          massKg: 430000,
+          payloadLeoKg: 6500,
+          payloadGtoKg: null,
+          thrustKn: 4350,
+          engines: "3x LE-9 + 1x LE-5B-3",
+        },
+      },
+    ],
   },
   {
     id: "pslv",
@@ -456,6 +801,53 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 2,
     propellant: "Solid / UDMH+N2O4 / Solid / MMH+MON",
     engines: "S139 + 6x Vikas + S-7 + 2x L-2-5",
+    variants: [
+      {
+        id: "pslv-ca",
+        name: "PSLV-CA (Core Alone)",
+        overrides: {
+          fullName: "PSLV-CA",
+          description:
+            "The lightest PSLV configuration without any strap-on boosters. Used for lighter payloads to low Earth orbit where the cost-savings of omitting SRBs is worthwhile.",
+          massKg: 230000,
+          payloadLeoKg: 1100,
+          payloadGtoKg: null,
+          thrustKn: 4860,
+          engines: "S139 core + PS2 + PS3 + PS4 (no strap-ons)",
+        },
+      },
+      {
+        id: "pslv-dl",
+        name: "PSLV-DL (2 Strap-ons)",
+        overrides: {
+          fullName: "PSLV-DL",
+          description:
+            "An intermediate PSLV configuration with two PS0M strap-on boosters, bridging the gap between Core Alone and the standard six-booster configurations.",
+          massKg: 260000,
+          payloadLeoKg: 2100,
+          payloadGtoKg: null,
+          engines: "S139 + 2x PSOM-XL + PS2 + PS3 + PS4",
+        },
+      },
+      {
+        id: "pslv-ql",
+        name: "PSLV-QL (4 Strap-ons)",
+        overrides: {
+          fullName: "PSLV-QL",
+          description:
+            "PSLV with four PS0M-XL strap-on boosters. Provides more payload capacity than the DL variant while being lighter than the full XL configuration.",
+          massKg: 290000,
+          payloadLeoKg: 3000,
+          payloadGtoKg: 1000,
+          engines: "S139 + 4x PSOM-XL + PS2 + PS3 + PS4",
+        },
+      },
+      {
+        id: "pslv-xl",
+        name: "PSLV-XL (6 Strap-ons)",
+        overrides: {},
+      },
+    ],
   },
   {
     id: "long-march-2d",
@@ -707,6 +1099,25 @@ export const ROCKETS: Rocket[] = [
     failedLaunches: 5,
     propellant: "LH2 / LOX + Solid boosters",
     engines: "1x Vulcain 2 + 1x HM7B + 2x P241 SRB",
+    variants: [
+      {
+        id: "eca",
+        name: "ECA (GTO Optimised)",
+        overrides: {},
+      },
+      {
+        id: "es",
+        name: "ES (LEO / ISS)",
+        overrides: {
+          fullName: "Ariane 5 ES",
+          description:
+            "The LEO-optimised Ariane 5 variant with a restartable EPS upper stage, used to deliver ATV cargo ships to the International Space Station. Lower GTO capacity but capable of complex orbital manoeuvres.",
+          payloadLeoKg: 21000,
+          payloadGtoKg: 7600,
+          engines: "1x Vulcain 2 + 1x Aestus (EPS) + 2x P241 SRB",
+        },
+      },
+    ],
   },
   {
     id: "delta-iv-heavy",

@@ -4,7 +4,7 @@ import NewsFeedPage from "@/app/tools/news-feed/page";
 export const metadata: Metadata = {
   title: "Intel | Orbit Intel",
   description:
-    "Curated news from the frontiers of space, AI, defence, and deep tech.",
+    "Signal feed from the frontiers of aerospace, AI, biotech, energy, and defence.",
 };
 
 export default function IntelPage() {

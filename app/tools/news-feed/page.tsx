@@ -52,7 +52,7 @@ export default function NewsFeedPage() {
     <div className="mx-auto max-w-4xl px-6 py-24">
       <SectionHeading
         title="Orbit Intel"
-        subtitle="Curated news from the frontiers of space, AI, defence, and deep tech. Updated every 30 minutes."
+        subtitle="Signal feed from the frontiers of aerospace, AI, biotech, energy, and defence. Tracking transformational technology, not incremental features."
       />
 
       {/* Signal banner */}

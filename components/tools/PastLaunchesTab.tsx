@@ -123,6 +123,7 @@ export default function PastLaunchesTab() {
   const [activeFilter, setActiveFilter] = useState<{ key: AggKey; value: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [yearOpen, setYearOpen] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   const fetchYear = useCallback((y: number) => {
     setLoading(true);
@@ -266,65 +267,78 @@ export default function PastLaunchesTab() {
 
       {/* Aggregation panel */}
       <div className="glass-card p-6">
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Launch Activity Breakdown
-        </h3>
-        <div className="mb-6 flex flex-wrap gap-2">
-          {AGG_TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => {
-                setAggTab(t.key);
-                if (activeFilter && activeFilter.key !== t.key) {
-                  setActiveFilter(null);
-                }
-              }}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                aggTab === t.key
-                  ? "bg-accent text-white"
-                  : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="space-y-2">
-          {aggData.map(([label, count]) => {
-            const isActive = activeFilter?.key === aggTab && activeFilter?.value === label;
-            return (
-              <button
-                key={label}
-                onClick={() => handleBarClick(aggTab, label)}
-                className={`group flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left transition-all ${
-                  isActive
-                    ? "bg-accent/10"
-                    : activeFilter && activeFilter.key === aggTab
-                      ? "opacity-40 hover:opacity-70"
-                      : "hover:bg-white/[0.03]"
-                }`}
-              >
-                <span className="w-32 shrink-0 truncate text-right text-sm text-muted-foreground sm:w-44">
-                  {label}
-                </span>
-                <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-white/5">
-                  <div
-                    className={`absolute inset-y-0 left-0 rounded-md transition-all duration-500 ${
-                      isActive ? "bg-accent/60" : "bg-accent/40"
+        <button
+          onClick={() => setBreakdownOpen(!breakdownOpen)}
+          className="flex w-full items-center justify-between"
+        >
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Launch Activity Breakdown
+          </h3>
+          <ChevronDown
+            size={16}
+            className={`text-muted-foreground transition-transform ${breakdownOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        {breakdownOpen && (
+          <div className="mt-4">
+            <div className="mb-6 flex flex-wrap gap-2">
+              {AGG_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => {
+                    setAggTab(t.key);
+                    if (activeFilter && activeFilter.key !== t.key) {
+                      setActiveFilter(null);
+                    }
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                    aggTab === t.key
+                      ? "bg-accent text-white"
+                      : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {aggData.map(([label, count]) => {
+                const isActive = activeFilter?.key === aggTab && activeFilter?.value === label;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => handleBarClick(aggTab, label)}
+                    className={`group flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left transition-all ${
+                      isActive
+                        ? "bg-accent/10"
+                        : activeFilter && activeFilter.key === aggTab
+                          ? "opacity-40 hover:opacity-70"
+                          : "hover:bg-white/[0.03]"
                     }`}
-                    style={{ width: `${(count / maxCount) * 100}%` }}
-                  />
-                  <span className="relative z-10 flex h-full items-center px-2 text-xs font-medium tabular-nums">
-                    {count}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-          {aggData.length === 0 && (
-            <p className="text-sm text-muted-foreground">No data available.</p>
-          )}
-        </div>
+                  >
+                    <span className="w-32 shrink-0 truncate text-right text-sm text-muted-foreground sm:w-44">
+                      {label}
+                    </span>
+                    <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-white/5">
+                      <div
+                        className={`absolute inset-y-0 left-0 rounded-md transition-all duration-500 ${
+                          isActive ? "bg-accent/60" : "bg-accent/40"
+                        }`}
+                        style={{ width: `${(count / maxCount) * 100}%` }}
+                      />
+                      <span className="relative z-10 flex h-full items-center px-2 text-xs font-medium tabular-nums">
+                        {count}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+              {aggData.length === 0 && (
+                <p className="text-sm text-muted-foreground">No data available.</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Active filter indicator */}

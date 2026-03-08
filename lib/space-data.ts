@@ -235,9 +235,9 @@ export function getOrbitRadius(distanceAU: number): number {
 }
 
 export function getPlanetSize(radiusKm: number): number {
-  return Math.max(3, Math.min(12, 2 + Math.sqrt(radiusKm / 2000)));
+  return Math.max(8, Math.min(28, 5 + Math.sqrt(radiusKm / 800)));
 }
 
 export function getOrbitalDuration(periodYears: number): number {
-  return 8 + Math.log(periodYears + 1) * 15;
+  return 25 + Math.log(periodYears + 1) * 40;
 }

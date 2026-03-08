@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import {
   ROCKETS,
-  COMPARISON_FIELDS,
   CATEGORY_LABELS,
+  resolveVariant,
   type Rocket as RocketType,
   type RocketCategory,
 } from "@/lib/rockets";
@@ -118,9 +118,60 @@ const ROCKET_IMAGES: Record<string, string> = {
   "delta-iv-heavy": "/rockets/delta-iv-heavy.jpg",
 };
 
+/* ── Variant Selector ── */
+function VariantSelector({
+  rocket,
+  selectedVariantId,
+  onChange,
+  className,
+}: {
+  rocket: RocketType;
+  selectedVariantId: string | undefined;
+  onChange: (variantId: string | undefined) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!rocket.variants || rocket.variants.length === 0) return null;
+
+  const selected = rocket.variants.find((v) => v.id === selectedVariantId);
+  const label = selected ? selected.name : rocket.variants[0]?.name ?? "Default";
+
+  return (
+    <div className={`relative ${className ?? ""}`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-white/10 hover:text-foreground"
+      >
+        <span className="max-w-[160px] truncate">{label}</span>
+        <ChevronDown size={12} className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-lg border border-white/10 bg-card shadow-xl">
+          {rocket.variants.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => {
+                onChange(v.id);
+                setOpen(false);
+              }}
+              className={`block w-full px-4 py-2 text-left text-xs transition-all hover:bg-white/10 ${
+                (selectedVariantId ?? rocket.variants![0].id) === v.id
+                  ? "bg-accent/20 text-accent"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {v.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Rocket Detail Modal ── */
 function RocketModal({
-  rocket,
+  rocket: baseRocket,
   isComparing,
   onToggleCompare,
   onClose,
@@ -130,6 +181,9 @@ function RocketModal({
   onToggleCompare: () => void;
   onClose: () => void;
 }) {
+  const [variantId, setVariantId] = useState<string | undefined>(undefined);
+  const rocket = resolveVariant(baseRocket, variantId);
+
   const successRate =
     rocket.successfulLaunches + rocket.failedLaunches > 0
       ? (
@@ -180,10 +234,10 @@ function RocketModal({
         <div className="flex flex-col sm:flex-row">
           {/* Image side */}
           <div className="relative h-48 sm:h-auto sm:w-2/5 shrink-0">
-            {ROCKET_IMAGES[rocket.id] ? (
+            {ROCKET_IMAGES[baseRocket.id] ? (
               <div
                 className="h-full min-h-[280px] bg-cover bg-center"
-                style={{ backgroundImage: `url(${ROCKET_IMAGES[rocket.id]})` }}
+                style={{ backgroundImage: `url(${ROCKET_IMAGES[baseRocket.id]})` }}
               >
                 <div className="h-full w-full bg-gradient-to-r from-transparent to-card/80 sm:block hidden" />
                 <div className="h-full w-full bg-gradient-to-t from-card to-transparent sm:hidden" />
@@ -209,9 +263,33 @@ function RocketModal({
               <h2 className="text-xl font-bold">{rocket.name}</h2>
               <span className="text-sm">{rocket.countryFlag}</span>
             </div>
-            <p className="mb-5 text-xs text-muted-foreground">
+            <p className="mb-3 text-xs text-muted-foreground">
               {rocket.operator} · {rocket.fullName}
             </p>
+
+            {/* Variant selector */}
+            {baseRocket.variants && baseRocket.variants.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Configuration
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {baseRocket.variants.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setVariantId(v.id)}
+                      className={`rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+                        (variantId ?? baseRocket.variants![0].id) === v.id
+                          ? "bg-accent text-white"
+                          : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      }`}
+                    >
+                      {v.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Description */}
             <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
@@ -373,28 +451,193 @@ function RocketCard({
         </p>
 
         {/* Compact stats row */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span>{rocket.heightM} m</span>
           <span>LEO {formatPayload(rocket.payloadLeoKg)}</span>
           <span>{rocket.reusable ? "Reusable" : "Expendable"}</span>
+          {rocket.variants && rocket.variants.length > 1 && (
+            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+              {rocket.variants.length} configs
+            </span>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
+/* ── Comparison colors per rocket column ── */
+const COMPARE_COLORS = [
+  { bar: "bg-sky-500", text: "text-sky-400", ring: "ring-sky-500/40" },
+  { bar: "bg-amber-500", text: "text-amber-400", ring: "ring-amber-500/40" },
+  { bar: "bg-emerald-500", text: "text-emerald-400", ring: "ring-emerald-500/40" },
+  { bar: "bg-purple-500", text: "text-purple-400", ring: "ring-purple-500/40" },
+  { bar: "bg-rose-500", text: "text-rose-400", ring: "ring-rose-500/40" },
+  { bar: "bg-teal-500", text: "text-teal-400", ring: "ring-teal-500/40" },
+];
+
+/* ── Bar-chart comparison fields ── */
+interface BarField {
+  key: keyof RocketType;
+  label: string;
+  unit: string;
+  format: (v: number) => string;
+  higherBetter: boolean;
+}
+
+const PHYSICAL_FIELDS: BarField[] = [
+  { key: "heightM", label: "Height", unit: "m", format: (v) => `${v} m`, higherBetter: true },
+  { key: "diameterM", label: "Diameter", unit: "m", format: (v) => `${v} m`, higherBetter: true },
+  {
+    key: "massKg",
+    label: "Launch Mass",
+    unit: "t",
+    format: (v) => (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M t` : `${(v / 1000).toFixed(0)} t`),
+    higherBetter: true,
+  },
+];
+
+const PERFORMANCE_FIELDS: BarField[] = [
+  {
+    key: "payloadLeoKg",
+    label: "Payload to LEO",
+    unit: "t",
+    format: (v) => `${(v / 1000).toFixed(1)} t`,
+    higherBetter: true,
+  },
+  {
+    key: "payloadGtoKg",
+    label: "Payload to GTO",
+    unit: "t",
+    format: (v) => `${(v / 1000).toFixed(1)} t`,
+    higherBetter: true,
+  },
+  {
+    key: "thrustKn",
+    label: "Liftoff Thrust",
+    unit: "kN",
+    format: (v) => (v >= 10000 ? `${(v / 1000).toFixed(1)} MN` : `${v.toLocaleString()} kN`),
+    higherBetter: true,
+  },
+];
+
+const ECONOMICS_FIELDS: BarField[] = [
+  {
+    key: "costPerLaunchUsd",
+    label: "Cost per Launch",
+    unit: "$",
+    format: (v) => (v >= 1_000_000_000 ? `$${(v / 1_000_000_000).toFixed(1)}B` : `$${(v / 1_000_000).toFixed(0)}M`),
+    higherBetter: false,
+  },
+  {
+    key: "successfulLaunches",
+    label: "Successful Launches",
+    unit: "",
+    format: (v) => String(v),
+    higherBetter: true,
+  },
+];
+
+function CompareBarRow({
+  field,
+  rockets,
+}: {
+  field: BarField;
+  rockets: RocketType[];
+}) {
+  const values = rockets.map((r) => {
+    const v = r[field.key];
+    return typeof v === "number" ? v : null;
+  });
+  const numericValues = values.filter((v): v is number => v !== null && v > 0);
+  const maxVal = numericValues.length > 0 ? Math.max(...numericValues) : 1;
+  const bestVal = numericValues.length > 1
+    ? (field.higherBetter ? Math.max(...numericValues) : Math.min(...numericValues))
+    : null;
+
+  return (
+    <div className="space-y-1.5">
+      <span className="text-xs text-muted-foreground">{field.label}</span>
+      <div className="space-y-1">
+        {rockets.map((r, i) => {
+          const val = values[i];
+          const pct = val !== null && val > 0 ? (val / maxVal) * 100 : 0;
+          const isBest = bestVal !== null && val === bestVal;
+          const color = COMPARE_COLORS[i % COMPARE_COLORS.length];
+          return (
+            <div key={r.id} className="flex items-center gap-3">
+              <span className={`w-16 shrink-0 text-right text-[11px] font-medium sm:w-20 ${color.text}`}>
+                {r.name}
+              </span>
+              <div className="relative h-7 flex-1 overflow-hidden rounded bg-white/[0.04]">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.max(pct, 0.5)}%` }}
+                  transition={{ duration: 0.6, ease: "easeOut", delay: i * 0.05 }}
+                  className={`absolute inset-y-0 left-0 rounded ${color.bar} ${isBest ? "opacity-80" : "opacity-40"}`}
+                />
+                <div className="relative z-10 flex h-full items-center justify-between px-2.5">
+                  <span className={`text-xs font-semibold tabular-nums ${isBest ? "text-white" : "text-white/80"}`}>
+                    {val !== null ? field.format(val) : "N/A"}
+                  </span>
+                  {isBest && (
+                    <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
+                      BEST
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CompareInfoRow({
+  label,
+  rockets,
+  getValue,
+}: {
+  label: string;
+  rockets: RocketType[];
+  getValue: (r: RocketType) => string;
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+      <span className="w-24 shrink-0 text-xs text-muted-foreground">{label}</span>
+      {rockets.map((r, i) => {
+        const color = COMPARE_COLORS[i % COMPARE_COLORS.length];
+        return (
+          <span key={r.id} className={`text-xs font-medium ${color.text}`}>
+            {getValue(r)}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Comparison Table ── */
 function ComparisonTable({
-  rockets,
+  baseRockets,
+  compareVariants,
+  onVariantChange,
   onRemove,
   onClear,
 }: {
-  rockets: RocketType[];
+  baseRockets: RocketType[];
+  compareVariants: Record<string, string>;
+  onVariantChange: (rocketId: string, variantId: string | undefined) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
 }) {
+  const rockets = baseRockets.map((r) => resolveVariant(r, compareVariants[r.id]));
+
   return (
     <div className="glass-card overflow-hidden">
+      {/* Header */}
       <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Rocket Comparison
@@ -406,72 +649,165 @@ function ComparisonTable({
           Clear all
         </button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/5">
-              <th className="sticky left-0 z-10 bg-[rgba(18,18,26,0.95)] backdrop-blur px-4 py-3 text-left text-xs font-medium text-muted-foreground">
-                Spec
-              </th>
-              {rockets.map((r) => (
-                <th key={r.id} className="min-w-[140px] px-4 py-3 text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold">{r.name}</span>
-                    <button
-                      onClick={() => onRemove(r.id)}
-                      className="rounded-full p-0.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    {r.operator}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {COMPARISON_FIELDS.map((field) => {
-              const values = rockets.map((r) => r[field.key]);
-              const numericValues = values.filter(
-                (v): v is number => typeof v === "number" && v !== null
-              );
-              const best =
-                field.higherBetter && numericValues.length > 1
-                  ? Math.max(...numericValues)
-                  : field.lowerBetter && numericValues.length > 1
-                    ? Math.min(...numericValues)
-                    : null;
 
-              return (
-                <tr
-                  key={field.key}
-                  className="border-b border-white/[0.03] hover:bg-white/[0.02]"
+      {/* Rocket identity cards */}
+      <div className="grid gap-3 border-b border-white/5 p-5" style={{ gridTemplateColumns: `repeat(${baseRockets.length}, minmax(0, 1fr))` }}>
+        {baseRockets.map((base, i) => {
+          const r = rockets[i];
+          const color = COMPARE_COLORS[i % COMPARE_COLORS.length];
+          return (
+            <div key={base.id} className={`relative overflow-hidden rounded-xl ring-1 ${color.ring}`}>
+              {/* Image */}
+              {ROCKET_IMAGES[base.id] ? (
+                <div
+                  className="h-28 bg-cover bg-center"
+                  style={{ backgroundImage: `url(${ROCKET_IMAGES[base.id]})` }}
                 >
-                  <td className="sticky left-0 z-10 bg-[rgba(18,18,26,0.95)] backdrop-blur px-4 py-2.5 text-xs text-muted-foreground">
-                    {field.label}
-                  </td>
-                  {rockets.map((r) => {
-                    const val = r[field.key];
-                    const isBest =
-                      best !== null && typeof val === "number" && val === best;
-                    return (
-                      <td
-                        key={r.id}
-                        className={`px-4 py-2.5 text-xs tabular-nums ${
-                          isBest ? "font-semibold text-emerald-400" : ""
-                        }`}
-                      >
-                        {field.format(val)}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  <div className="h-full w-full bg-gradient-to-t from-card via-card/60 to-transparent" />
+                </div>
+              ) : (
+                <div className="flex h-28 items-center justify-center bg-white/[0.02]">
+                  <Rocket size={24} className="text-muted-foreground/20" />
+                </div>
+              )}
+              {/* Info overlay */}
+              <div className="absolute inset-x-0 bottom-0 p-3">
+                <div className="flex items-start justify-between gap-1">
+                  <div>
+                    <p className={`text-sm font-bold ${color.text}`}>{r.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{r.operator} · {r.countryFlag}</p>
+                  </div>
+                  <button
+                    onClick={() => onRemove(base.id)}
+                    className="shrink-0 rounded-full bg-white/10 p-1 text-muted-foreground hover:bg-white/20 hover:text-foreground"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              </div>
+              {/* Status */}
+              <div className="absolute left-2 top-2">
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold backdrop-blur-sm ${statusColor(r.status)}`}>
+                  {statusLabel(r.status)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Variant selectors row */}
+      {baseRockets.some((r) => r.variants && r.variants.length > 0) && (
+        <div className="grid gap-3 border-b border-white/5 px-5 py-3" style={{ gridTemplateColumns: `repeat(${baseRockets.length}, minmax(0, 1fr))` }}>
+          {baseRockets.map((base) => (
+            <div key={base.id}>
+              {base.variants && base.variants.length > 0 ? (
+                <VariantSelector
+                  rocket={base}
+                  selectedVariantId={compareVariants[base.id]}
+                  onChange={(vid) => onVariantChange(base.id, vid)}
+                />
+              ) : (
+                <span className="text-[10px] text-muted-foreground/40">No variants</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Visual comparison sections */}
+      <div className="space-y-6 p-5">
+        {/* Physical */}
+        <div>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+            Physical Dimensions
+          </p>
+          <div className="space-y-4">
+            {PHYSICAL_FIELDS.map((f) => (
+              <CompareBarRow key={f.key} field={f} rockets={rockets} />
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-white/5" />
+
+        {/* Performance */}
+        <div>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+            Performance
+          </p>
+          <div className="space-y-4">
+            {PERFORMANCE_FIELDS.map((f) => (
+              <CompareBarRow key={f.key} field={f} rockets={rockets} />
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-white/5" />
+
+        {/* Economics & Track Record */}
+        <div>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+            Economics & Track Record
+          </p>
+          <div className="space-y-4">
+            {ECONOMICS_FIELDS.map((f) => (
+              <CompareBarRow key={f.key} field={f} rockets={rockets} />
+            ))}
+            {/* Success rate as special visual */}
+            <div className="space-y-1.5">
+              <span className="text-xs text-muted-foreground">Success Rate</span>
+              <div className="space-y-1">
+                {rockets.map((r, i) => {
+                  const total = r.successfulLaunches + r.failedLaunches;
+                  const rate = total > 0 ? (r.successfulLaunches / total) * 100 : 0;
+                  const color = COMPARE_COLORS[i % COMPARE_COLORS.length];
+                  return (
+                    <div key={r.id} className="flex items-center gap-3">
+                      <span className={`w-16 shrink-0 text-right text-[11px] font-medium sm:w-20 ${color.text}`}>
+                        {r.name}
+                      </span>
+                      <div className="relative h-7 flex-1 overflow-hidden rounded bg-white/[0.04]">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${rate}%` }}
+                          transition={{ duration: 0.6, ease: "easeOut", delay: i * 0.05 }}
+                          className={`absolute inset-y-0 left-0 rounded ${rate >= 95 ? "bg-emerald-500/60" : rate >= 80 ? "bg-amber-500/50" : "bg-red-500/50"}`}
+                        />
+                        <div className="relative z-10 flex h-full items-center justify-between px-2.5">
+                          <span className="text-xs font-semibold tabular-nums text-white/80">
+                            {total > 0 ? `${rate.toFixed(1)}%` : "No flights"}
+                          </span>
+                          {total > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {r.successfulLaunches}/{total} flights
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/5" />
+
+        {/* Technical details as compact info rows */}
+        <div>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+            Technical Details
+          </p>
+          <div className="space-y-2.5 rounded-lg bg-white/[0.02] p-4">
+            <CompareInfoRow label="Stages" rockets={rockets} getValue={(r) => String(r.stages)} />
+            <CompareInfoRow label="Propellant" rockets={rockets} getValue={(r) => r.propellant} />
+            <CompareInfoRow label="Engines" rockets={rockets} getValue={(r) => r.engines} />
+            <CompareInfoRow label="Reusable" rockets={rockets} getValue={(r) => r.reusable ? "Yes" : "No"} />
+            <CompareInfoRow label="First Flight" rockets={rockets} getValue={(r) => r.maidenFlight || "TBD"} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -491,6 +827,7 @@ export default function RocketsTab() {
   const [sortAsc, setSortAsc] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareVariants, setCompareVariants] = useState<Record<string, string>>({});
   const [selectedRocket, setSelectedRocket] = useState<RocketType | null>(null);
 
   const filtered = useMemo(() => {
@@ -551,9 +888,24 @@ export default function RocketsTab() {
       {/* Comparison table */}
       {compareRockets.length >= 2 && (
         <ComparisonTable
-          rockets={compareRockets}
+          baseRockets={compareRockets}
+          compareVariants={compareVariants}
+          onVariantChange={(rocketId, variantId) =>
+            setCompareVariants((prev) => {
+              const next = { ...prev };
+              if (variantId) {
+                next[rocketId] = variantId;
+              } else {
+                delete next[rocketId];
+              }
+              return next;
+            })
+          }
           onRemove={(id) => toggleCompare(id)}
-          onClear={() => setCompareIds([])}
+          onClear={() => {
+            setCompareIds([]);
+            setCompareVariants({});
+          }}
         />
       )}
 

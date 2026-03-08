@@ -57,7 +57,7 @@ const sections: ShowcaseSection[] = [
     title: "Intel",
     subtitle: "Orbit Intel",
     description:
-      "Curated signal feed aggregating news from the frontiers of space, AI, defence, and deep tech. Highlights noteworthy developments with automated signal detection.",
+      "Signal feed from the frontiers of aerospace, AI, biotech, energy, and defence. Tracks transformational technology breakthroughs with automated signal detection.",
     href: "/intel",
     icon: <Newspaper size={20} />,
     accentColor: "from-blue-500/20 to-cyan-500/10",

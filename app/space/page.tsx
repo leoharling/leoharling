@@ -24,29 +24,29 @@ export default function SpacePage() {
 
   return (
     <div className="relative min-h-screen pt-16">
+      {/* Mobile nav — horizontal, pinned to top */}
+      <div className="sticky top-16 z-20 flex justify-center border-b border-white/[0.04] bg-background/80 backdrop-blur-md py-2 md:hidden">
+        <div className="flex gap-3">
+          {["Earth", "Orbit", "Deep Space"].map((label, i) => (
+            <button
+              key={label}
+              onClick={() => setDomain(i)}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                domain === i
+                  ? "bg-accent text-white"
+                  : "text-muted-foreground bg-white/5"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex">
         {/* Vertical sidebar — top-aligned, not centered */}
         <div className="sticky top-16 z-20 hidden h-[calc(100vh-4rem)] shrink-0 border-r border-white/[0.04] md:block">
           <RocketSlider value={domain} onChange={setDomain} />
-        </div>
-
-        {/* Mobile nav */}
-        <div className="flex justify-center border-b border-white/[0.04] py-2 md:hidden">
-          <div className="flex gap-4">
-            {["Earth", "Orbit", "Deep Space"].map((label, i) => (
-              <button
-                key={label}
-                onClick={() => setDomain(i)}
-                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                  domain === i
-                    ? "bg-accent text-white"
-                    : "text-muted-foreground bg-white/5"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Content */}

@@ -18,10 +18,30 @@ const SIGNAL_STYLES: Record<
   SignalType,
   { border: string; badge: string; glow: string }
 > = {
+  breakthrough: {
+    border: "border-l-rose-500",
+    badge: "bg-rose-500/15 text-rose-400",
+    glow: "hover:shadow-[0_0_20px_rgba(244,63,94,0.15)]",
+  },
+  launch: {
+    border: "border-l-sky-500",
+    badge: "bg-sky-500/15 text-sky-400",
+    glow: "hover:shadow-[0_0_20px_rgba(14,165,233,0.15)]",
+  },
   "ai-launch": {
     border: "border-l-violet-500",
     badge: "bg-violet-500/15 text-violet-400",
     glow: "hover:shadow-[0_0_20px_rgba(139,92,246,0.15)]",
+  },
+  biotech: {
+    border: "border-l-teal-500",
+    badge: "bg-teal-500/15 text-teal-400",
+    glow: "hover:shadow-[0_0_20px_rgba(20,184,166,0.15)]",
+  },
+  energy: {
+    border: "border-l-orange-500",
+    badge: "bg-orange-500/15 text-orange-400",
+    glow: "hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]",
   },
   funding: {
     border: "border-l-emerald-500",
