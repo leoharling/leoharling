@@ -3,27 +3,38 @@ import { supabase } from "@/lib/supabase";
 
 const SPACE_DEVS = "https://ll.thespacedevs.com/2.3.0/launches";
 
-// Fetch from The Space Devs and cache in Supabase (one-time for historical years)
-async function fetchAndCache(cacheKey: string, url: string) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "OrbitIntel/1.0 (leoharling.com)" },
-  });
-  if (res.status === 429) {
-    return { error: "rate-limit", data: null };
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Fetch all pages from The Space Devs and cache in Supabase
+async function fetchAndCache(cacheKey: string, startUrl: string) {
+  const allResults: unknown[] = [];
+  let url: string | null = startUrl;
+
+  while (url) {
+    const res: Response = await fetch(url, {
+      headers: { "User-Agent": "OrbitIntel/1.0 (leoharling.com)" },
+    });
+    if (res.status === 429) {
+      return { error: "rate-limit", data: null };
+    }
+    if (!res.ok) {
+      return { error: `HTTP ${res.status}`, data: null };
+    }
+    const json: { results?: unknown[]; next?: string } = await res.json();
+    allResults.push(...(json.results || []));
+    url = json.next || null;
+    if (url) await sleep(2500);
   }
-  if (!res.ok) {
-    return { error: `HTTP ${res.status}`, data: null };
-  }
-  const json = await res.json();
-  const launches = json.results || [];
 
   // Cache in Supabase
   await supabase.from("launch_cache").upsert(
-    { cache_key: cacheKey, data: launches, updated_at: new Date().toISOString() },
+    { cache_key: cacheKey, data: allResults, updated_at: new Date().toISOString() },
     { onConflict: "cache_key" }
   );
 
-  return { error: null, data: launches };
+  return { error: null, data: allResults };
 }
 
 export async function GET(request: NextRequest) {

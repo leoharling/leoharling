@@ -9,14 +9,23 @@ function sleep(ms: number) {
 }
 
 async function fetchYear(year: number) {
-  const res = await fetch(
-    `${SPACE_DEVS}/previous/?limit=100&mode=normal&ordering=-net&net__gte=${year}-01-01T00:00:00Z&net__lte=${year}-12-31T23:59:59Z`,
-    { headers: { "User-Agent": "OrbitIntel/1.0 (leoharling.com)" } }
-  );
-  if (res.status === 429) return { rateLimited: true, launches: [] };
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
-  return { rateLimited: false, launches: data.results || [] };
+  const allLaunches: unknown[] = [];
+  let url: string | null =
+    `${SPACE_DEVS}/previous/?limit=100&mode=normal&ordering=-net&net__gte=${year}-01-01T00:00:00Z&net__lte=${year}-12-31T23:59:59Z`;
+
+  while (url) {
+    const res: Response = await fetch(url, {
+      headers: { "User-Agent": "OrbitIntel/1.0 (leoharling.com)" },
+    });
+    if (res.status === 429) return { rateLimited: true, launches: allLaunches };
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const data: { results?: unknown[]; next?: string } = await res.json();
+    allLaunches.push(...(data.results || []));
+    url = data.next || null;
+    if (url) await sleep(2500); // respect rate limit between pages
+  }
+
+  return { rateLimited: false, launches: allLaunches };
 }
 
 // One-time backfill endpoint. Fetches past launches year-by-year from prod API.
@@ -45,7 +54,8 @@ export async function GET(request: Request) {
       .single();
 
     const rows = existing?.data as unknown[] | null;
-    if (rows && rows.length > 0) {
+    // Skip if cached with data AND not exactly 100 (which means it was truncated before pagination fix)
+    if (rows && rows.length > 0 && rows.length !== 100) {
       results.push(`${year}: cached (${rows.length})`);
       continue;
     }
@@ -55,10 +65,17 @@ export async function GET(request: Request) {
       await supabase.from("launch_cache").delete().eq("cache_key", cacheKey);
     }
 
-    // Fetch from prod
+    // Fetch from prod (paginates through all results)
     const { rateLimited, launches } = await fetchYear(year);
     if (rateLimited) {
-      results.push(`${year}: RATE LIMITED — re-run to continue`);
+      // Save any partial results we got before hitting the limit
+      if (launches.length > 0) {
+        await supabase.from("launch_cache").upsert(
+          { cache_key: cacheKey, data: launches, updated_at: new Date().toISOString() },
+          { onConflict: "cache_key" }
+        );
+      }
+      results.push(`${year}: RATE LIMITED (got ${launches.length} so far) — re-run to continue`);
       return NextResponse.json({ ok: false, synced: results, resumeAt: year });
     }
 

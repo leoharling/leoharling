@@ -4,8 +4,9 @@ import {
   Briefcase,
   GraduationCap,
   Award,
-  Globe,
   Languages,
+  MapPin,
+  Calendar,
 } from "lucide-react";
 import FadeIn from "@/components/ui/FadeIn";
 import SectionHeading from "@/components/ui/SectionHeading";
@@ -21,9 +22,10 @@ const experience = [
   {
     role: "Associate, Strategy Consulting",
     company: "Strategy&",
-    team: "Corporate & Business Strategy – Technology Strategy / Aerospace, Space & Defence",
+    team: "Corporate & Business Strategy — Technology Strategy / Aerospace, Space & Defence",
     period: "Sep 2024 – Present",
-    location: "Berlin, Germany",
+    location: "Berlin",
+    current: true,
     highlights: [
       "Enabling executive decision-making by synthesizing commercial, technical and organizational inputs into strategic recommendations",
       "Built a monitoring tool for engine supply chains at an aerospace OEM, improving bottleneck visibility and delivery readiness",
@@ -36,7 +38,8 @@ const experience = [
     company: "Enpal",
     team: "CGO Office",
     period: "Apr 2024 – Jun 2024",
-    location: "Berlin, Germany",
+    location: "Berlin",
+    current: false,
     highlights: [
       "Scaled field sales by building a lead steering algorithm for process automation",
       "Supported growth initiatives including sales funnel optimization and commercial performance tracking",
@@ -47,7 +50,8 @@ const experience = [
     company: "Strategy&",
     team: "Corporate & Business Strategy",
     period: "Oct 2022 – Dec 2022",
-    location: "Frankfurt, Germany",
+    location: "Frankfurt",
+    current: false,
     highlights: [
       "Designed an operating model for a leading insurer enabling monitoring and reporting in a sales cooperation",
       "Built a multi-framework compliance register for a European cloud provider, improving audit readiness",
@@ -58,7 +62,8 @@ const experience = [
     company: "Oddo BHF",
     team: "COO Corporates & Markets Office",
     period: "Oct 2021 – Dec 2021",
-    location: "Frankfurt, Germany",
+    location: "Frankfurt",
+    current: false,
     highlights: [
       "Conducted company and market analyses for a new startup financing initiative",
       "Optimized processes across COO Office and Corporate & Investment Banking interfaces",
@@ -71,19 +76,19 @@ const education = [
     degree: "M.Sc. Business Administration & Electrical Engineering / IT",
     school: "Technical University Darmstadt",
     period: "2021 – 2024",
-    details: "Focus: Finance, Entrepreneurship, Machine Learning & Automation",
+    details: "Finance, Entrepreneurship, Machine Learning & Automation",
     grade: "1.5",
     thesis:
       "A Comparative View on Exit Options Choice for VC-Backed Startups (1.0)",
   },
   {
-    degree: "Semester Abroad, Industrial Engineering",
+    degree: "Semester Abroad",
     school: "Universidad Politecnica de Valencia",
     period: "Feb – Jun 2023",
     details: "Valencia, Spain",
   },
   {
-    degree: "Semester Abroad, Business & Electrical Engineering",
+    degree: "Semester Abroad",
     school: "University of California, Berkeley",
     period: "Jan – May 2022",
     details: "Berkeley, United States",
@@ -92,29 +97,25 @@ const education = [
     degree: "B.Sc. Business Administration & Electrical Engineering / IT",
     school: "Technical University Darmstadt",
     period: "2017 – 2021",
-    details:
-      "Technical specialization: Automation Systems, Top 15% of graduates",
+    details: "Automation Systems — Top 15% of graduates",
     grade: "2.1",
     thesis:
-      "SPACs Are Back! – On the Characteristics and Performance of Recent SPAC IPOs (1.0)",
+      "SPACs Are Back! — On the Characteristics and Performance of Recent SPAC IPOs (1.0)",
   },
 ];
 
-const focusAreas = [
-  "New Space Ecosystem",
-  "Defence & Public Procurement",
-  "DevSecOps & Security by Design",
-  "Scaling Processes & Execution",
-  "Deep Tech Startups",
-  "AI & Automation",
+const awards = [
+  { name: "Deutschlandstipendium", year: "2023" },
+  { name: "ERASMUS+ Scholarship", year: "2023" },
+  { name: "DAAD PROMOS Scholarship", year: "2022" },
+  { name: "e-fellows Scholarship", year: "2022" },
+  { name: "Abitur Award in Physics", year: "2017" },
 ];
 
-const awards = [
-  "Deutschlandstipendium (2023)",
-  "ERASMUS+ Scholarship (2023)",
-  "DAAD PROMOS Scholarship (2022)",
-  "e-fellows Scholarship (2022)",
-  "Abitur Award in Physics (2017)",
+const languages = [
+  { lang: "German", level: "Native" },
+  { lang: "English", level: "C2 (IELTS 8.0)" },
+  { lang: "Spanish", level: "B1" },
 ];
 
 export default function AboutPage() {
@@ -126,31 +127,26 @@ export default function AboutPage() {
         subtitle="Strategy consultant turning complex challenges in aerospace, space and defence into actionable outcomes."
       />
 
+      {/* Intro + CV */}
       <FadeIn>
-        <div className="mb-16 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <Button href="/CV_LSH.pdf" external>
-            <Download size={16} />
-            Download CV
-          </Button>
-        </div>
-      </FadeIn>
-
-      {/* Focus Areas */}
-      <FadeIn>
-        <div className="mb-16">
-          <h3 className="mb-4 flex items-center gap-2 text-xl font-semibold">
-            <Globe size={20} className="text-accent" />
-            Focus Areas
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {focusAreas.map((area) => (
-              <span
-                key={area}
-                className="rounded-full border border-accent/20 bg-accent/5 px-4 py-1.5 text-sm text-accent"
-              >
-                {area}
-              </span>
-            ))}
+        <div className="mb-16 rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 sm:p-8">
+          <p className="text-[15px] leading-relaxed text-muted-foreground">
+            I work at the intersection of strategy and technology — helping
+            organisations in aerospace, space and defence navigate complexity,
+            make better decisions and execute faster. My background bridges
+            business and engineering, with degrees in both and experience ranging
+            from venture development to defence procurement to New Space business
+            development.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Button href="/CV_LSH.pdf" external size="sm">
+              <Download size={15} />
+              Download CV
+            </Button>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MapPin size={12} />
+              Berlin, Germany
+            </span>
           </div>
         </div>
       </FadeIn>
@@ -160,7 +156,7 @@ export default function AboutPage() {
         <FadeIn>
           <h3 className="mb-8 flex items-center gap-2 text-xl font-semibold">
             <Briefcase size={20} className="text-accent" />
-            Professional Experience
+            Experience
           </h3>
         </FadeIn>
 
@@ -170,12 +166,11 @@ export default function AboutPage() {
               <div className="relative">
                 <div className="absolute -left-[2.55rem] top-1.5 h-3 w-3 rounded-full border-2 border-accent bg-background" />
                 <p className="font-mono text-xs text-muted-foreground">
-                  {exp.period}
+                  {exp.period} &middot; {exp.location}
                 </p>
                 <h4 className="mt-1 text-lg font-semibold">{exp.role}</h4>
                 <p className="text-accent">{exp.company}</p>
                 <p className="text-sm text-muted-foreground">{exp.team}</p>
-                <p className="text-sm text-muted-foreground">{exp.location}</p>
                 <ul className="mt-3 space-y-1.5">
                   {exp.highlights.map((h, j) => (
                     <li
@@ -229,34 +224,38 @@ export default function AboutPage() {
       </div>
 
       {/* Awards & Languages */}
-      <div className="grid gap-8 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <FadeIn>
-          <div className="glass-card p-6">
-            <h3 className="mb-4 flex items-center gap-2 font-semibold">
-              <Award size={18} className="text-accent" />
+          <div className="h-full rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
+            <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <Award size={15} className="text-accent" />
               Scholarships & Awards
             </h3>
-            <ul className="space-y-2">
+            <div className="space-y-3">
               {awards.map((award) => (
-                <li key={award} className="text-sm text-muted-foreground">
-                  {award}
-                </li>
+                <div key={award.name} className="flex items-center justify-between">
+                  <span className="text-sm">{award.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{award.year}</span>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         </FadeIn>
 
-        <FadeIn delay={0.15}>
-          <div className="glass-card p-6">
-            <h3 className="mb-4 flex items-center gap-2 font-semibold">
-              <Languages size={18} className="text-accent" />
+        <FadeIn delay={0.1}>
+          <div className="h-full rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
+            <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <Languages size={15} className="text-accent" />
               Languages
             </h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>German — Native</li>
-              <li>English — C2 (IELTS: 8.0)</li>
-              <li>Spanish — B1</li>
-            </ul>
+            <div className="space-y-3">
+              {languages.map((l) => (
+                <div key={l.lang} className="flex items-center justify-between">
+                  <span className="text-sm">{l.lang}</span>
+                  <span className="text-xs text-muted-foreground">{l.level}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </FadeIn>
       </div>

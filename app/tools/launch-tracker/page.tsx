@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, CalendarClock, History, Rocket as RocketIcon } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 import SectionHeading from "@/components/ui/SectionHeading";
 import LaunchCard from "@/components/tools/LaunchCard";
+import LaunchModal from "@/components/tools/LaunchModal";
 import PastLaunchesTab from "@/components/tools/PastLaunchesTab";
 import RocketsTab from "@/components/tools/RocketsTab";
 
@@ -19,7 +21,11 @@ interface Launch {
     location: { name: string };
   };
   image?: { image_url?: string } | null;
-  mission?: { description?: string } | null;
+  mission?: {
+    description?: string;
+    type?: string;
+    orbit?: { name?: string; abbrev?: string };
+  } | null;
 }
 
 
@@ -38,6 +44,7 @@ export default function LaunchTrackerPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("All");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [selectedLaunch, setSelectedLaunch] = useState<Launch | null>(null);
 
   useEffect(() => {
     fetch("/api/launches?type=upcoming")
@@ -169,18 +176,23 @@ export default function LaunchTrackerPage() {
               )}
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((launch) => (
-                  <LaunchCard
+                  <div
                     key={launch.id}
-                    name={launch.name}
-                    provider={launch.launch_service_provider.name}
-                    vehicle={launch.rocket.configuration.name}
-                    padName={launch.pad.name}
-                    padLocation={launch.pad.location.name}
-                    launchDate={launch.net}
-                    status={launch.status.name}
-                    imageUrl={launch.image?.image_url}
-                    missionDescription={launch.mission?.description}
-                  />
+                    className="cursor-pointer"
+                    onClick={() => setSelectedLaunch(launch)}
+                  >
+                    <LaunchCard
+                      name={launch.name}
+                      provider={launch.launch_service_provider.name}
+                      vehicle={launch.rocket.configuration.name}
+                      padName={launch.pad.name}
+                      padLocation={launch.pad.location.name}
+                      launchDate={launch.net}
+                      status={launch.status.name}
+                      imageUrl={launch.image?.image_url}
+                      missionDescription={launch.mission?.description}
+                    />
+                  </div>
                 ))}
               </div>
             </>
@@ -193,6 +205,16 @@ export default function LaunchTrackerPage() {
 
       {/* Rockets tab */}
       {tab === "rockets" && <RocketsTab />}
+
+      {/* Launch detail modal */}
+      <AnimatePresence>
+        {selectedLaunch && (
+          <LaunchModal
+            launch={selectedLaunch}
+            onClose={() => setSelectedLaunch(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

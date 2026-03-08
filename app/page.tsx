@@ -100,7 +100,7 @@ const projects = [
     status: "Live",
   },
   {
-    title: "AeroFlow",
+    title: "DCM Tool",
     description: "Aerospace supply chain simulation & bottleneck analysis.",
     icon: <Network size={20} />,
     href: "/projects",
@@ -108,7 +108,7 @@ const projects = [
     status: "In Dev",
   },
   {
-    title: "GRC Shield",
+    title: "SiKo Tool",
     description: "IT-Grundschutz compliance & Sicherheitskonzepte builder.",
     icon: <ShieldCheck size={20} />,
     href: "/projects",

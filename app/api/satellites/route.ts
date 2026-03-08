@@ -3,9 +3,23 @@ import { NextResponse } from "next/server";
 const CELESTRAK = "https://celestrak.org/NORAD/elements/gp.php";
 
 const GROUPS = [
-  { name: "Starlink", color: "#60a5fa", param: "GROUP=starlink", limit: 150 },
-  { name: "OneWeb", color: "#34d399", param: "GROUP=oneweb", limit: 80 },
-  { name: "GPS", color: "#fbbf24", param: "GROUP=gps-ops", limit: 50 },
+  // Communications
+  { name: "Starlink", category: "comms", color: "#60a5fa", param: "GROUP=starlink", limit: 200 },
+  { name: "OneWeb", category: "comms", color: "#93c5fd", param: "GROUP=oneweb", limit: 100 },
+  { name: "Iridium NEXT", category: "comms", color: "#7dd3fc", param: "GROUP=iridium-NEXT", limit: 66 },
+  // Navigation
+  { name: "GPS", category: "nav", color: "#fbbf24", param: "GROUP=gps-ops", limit: 31 },
+  { name: "GLONASS", category: "nav", color: "#fcd34d", param: "GROUP=glonass-operational", limit: 24 },
+  { name: "Galileo", category: "nav", color: "#fde68a", param: "GROUP=galileo", limit: 30 },
+  { name: "BeiDou", category: "nav", color: "#f59e0b", param: "GROUP=beidou", limit: 45 },
+  // Earth & Weather
+  { name: "Weather", category: "earth", color: "#22d3ee", param: "GROUP=weather", limit: 40 },
+  { name: "Earth Resources", category: "earth", color: "#34d399", param: "GROUP=resource", limit: 40 },
+  // Geostationary belt
+  { name: "Geostationary", category: "geo", color: "#f472b6", param: "GROUP=geo", limit: 100 },
+  // Debris
+  { name: "Cosmos Debris", category: "debris", color: "#ef4444", param: "GROUP=cosmos-2251-debris", limit: 100 },
+  { name: "Iridium Debris", category: "debris", color: "#ef4444", param: "GROUP=iridium-33-debris", limit: 100 },
 ];
 
 const NOTABLE = [
@@ -91,7 +105,7 @@ export async function GET() {
       });
       if (!res.ok) throw new Error(`Celestrak ${g.name}: ${res.status}`);
       const text = await res.text();
-      return { name: g.name, color: g.color, tles: parseTLEs(text, g.limit) };
+      return { name: g.name, category: g.category, color: g.color, tles: parseTLEs(text, g.limit) };
     });
 
     const notablePromises = NOTABLE.map(async (n) => {
@@ -122,6 +136,7 @@ export async function GET() {
       .filter(
         (r): r is PromiseFulfilledResult<{
           name: string;
+          category: string;
           color: string;
           tles: { name: string; line1: string; line2: string }[];
         }> => r.status === "fulfilled"

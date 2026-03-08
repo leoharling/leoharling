@@ -276,18 +276,33 @@ function FlyToController({ conflictCenter, conflictZoom, focusLocation, onFocuse
 }
 
 /* ── Map component ── */
+export interface LiveEvent {
+  lat: number;
+  lng: number;
+  title: string;
+  description: string;
+  type: string;
+  date?: string;
+  fatalities?: number;
+  source?: string;
+}
+
 export default function ConflictMap({
   conflict,
   allConflicts,
   onSelectConflict,
   focusLocation,
   onFocused,
+  liveEvents,
+  liveGeoJSON,
 }: {
   conflict: Conflict;
   allConflicts: Conflict[];
   onSelectConflict: (id: string) => void;
   focusLocation?: { lat: number; lng: number } | null;
   onFocused?: () => void;
+  liveEvents?: LiveEvent[];
+  liveGeoJSON?: object | null;
 }) {
   const mapRef = useRef<MapRef>(null);
   const [popup, setPopup] = useState<{
@@ -345,10 +360,10 @@ export default function ConflictMap({
   const controlledAreasData = useMemo(() => controlledAreasToGeoJSON(conflict.controlledAreas), [conflict.controlledAreas]);
   const otherConflictsData = useMemo(() => otherConflictsToGeoJSON(allConflicts, conflict.id), [allConflicts, conflict.id]);
 
-  // Determine occupied territory data
+  // Determine occupied territory data (prefer live GeoJSON from DeepState)
   const occupiedTerritoryData = useMemo(() => {
-    if (conflict.id === "ukraine" && externalGeoJSON["ukraine-occupied"]) {
-      return externalGeoJSON["ukraine-occupied"];
+    if (conflict.id === "ukraine" && (liveGeoJSON || externalGeoJSON["ukraine-occupied"])) {
+      return (liveGeoJSON as FeatureCollection) || externalGeoJSON["ukraine-occupied"];
     }
     if (conflict.id === "middleeast" && externalGeoJSON["gaza"]) {
       const gazaFeatures = externalGeoJSON["gaza"].features.map((f) => ({
@@ -359,7 +374,7 @@ export default function ConflictMap({
       return { type: "FeatureCollection" as const, features: [...gazaFeatures, ...lebanonFeatures] };
     }
     return controlledAreasData;
-  }, [conflict.id, externalGeoJSON, controlledAreasData]);
+  }, [conflict.id, externalGeoJSON, controlledAreasData, liveGeoJSON]);
 
   // Safe query for interactive layers
   const safeQuery = useCallback((map: maplibregl.Map, point: maplibregl.PointLike, layers: string[]) => {
@@ -476,6 +491,22 @@ export default function ConflictMap({
             lng={ev.lng}
             color={EVENT_COLORS[ev.type] || "#ef4444"}
             size={7}
+            title={ev.title}
+            description={ev.description}
+            type={ev.type}
+            date={ev.date}
+            pulse
+          />
+        ))}
+
+        {/* ── 5b. Live ACLED event markers ── */}
+        {layerVisibility.events && liveEvents?.map((ev, i) => (
+          <MapDot
+            key={`${conflict.id}-live-${i}`}
+            lat={ev.lat}
+            lng={ev.lng}
+            color={EVENT_COLORS[ev.type] || "#ef4444"}
+            size={5}
             title={ev.title}
             description={ev.description}
             type={ev.type}

@@ -1,8 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+// Simple in-memory rate limit (per serverless instance, but still helpful)
+const recentSubmissions = new Map<string, number>();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_SUBMISSIONS = 3; // max 3 per minute per IP
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  // Clean old entries
+  for (const [key, timestamp] of recentSubmissions) {
+    if (now - timestamp > RATE_LIMIT_WINDOW) recentSubmissions.delete(key);
+  }
+  const count = [...recentSubmissions.entries()].filter(([k]) => k.startsWith(ip)).length;
+  if (count >= MAX_SUBMISSIONS) return false;
+  recentSubmissions.set(`${ip}_${now}`, now);
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { error: "Too many submissions. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { name, email, message } = body;
 

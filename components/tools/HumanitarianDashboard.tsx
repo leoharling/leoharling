@@ -18,7 +18,14 @@ function Stat({ label, value, subtext }: { label: string; value: string; subtext
   );
 }
 
-export default function HumanitarianDashboard({ data }: { data: HumanitarianData }) {
+export interface LiveUNHCR {
+  refugees: number;
+  asylum_seekers: number;
+  idps: number;
+  year: number;
+}
+
+export default function HumanitarianDashboard({ data, unhcr }: { data: HumanitarianData; unhcr?: LiveUNHCR | null }) {
   return (
     <div className="space-y-5">
       {/* Casualties */}
@@ -41,14 +48,34 @@ export default function HumanitarianDashboard({ data }: { data: HumanitarianData
         <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Displacement
         </h4>
-        <div className="grid grid-cols-2 gap-3">
-          {data.displacement.internal && (
-            <Stat label="Internal" value={data.displacement.internal.value} subtext={data.displacement.internal.subtext} />
-          )}
-          {data.displacement.refugees && (
-            <Stat label="Refugees" value={data.displacement.refugees.value} subtext={data.displacement.refugees.subtext} />
-          )}
-        </div>
+        {unhcr && unhcr.year >= 2023 ? (
+          <div>
+            <div className="grid grid-cols-2 gap-3">
+              {unhcr.idps > 0 && (
+                <Stat label="Internally Displaced" value={new Intl.NumberFormat("en-US").format(unhcr.idps)} subtext={`UNHCR ${unhcr.year}`} />
+              )}
+              {unhcr.refugees > 0 && (
+                <Stat label="Refugees" value={new Intl.NumberFormat("en-US").format(unhcr.refugees)} subtext={`UNHCR ${unhcr.year}`} />
+              )}
+              {unhcr.asylum_seekers > 0 && (
+                <Stat label="Asylum Seekers" value={new Intl.NumberFormat("en-US").format(unhcr.asylum_seekers)} subtext={`UNHCR ${unhcr.year}`} />
+              )}
+            </div>
+            <p className="mt-1.5 flex items-center gap-1 text-[9px] text-green-400/70">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+              Live data from UNHCR
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {data.displacement.internal && (
+              <Stat label="Internal" value={data.displacement.internal.value} subtext={data.displacement.internal.subtext} />
+            )}
+            {data.displacement.refugees && (
+              <Stat label="Refugees" value={data.displacement.refugees.value} subtext={data.displacement.refugees.subtext} />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Food Security */}

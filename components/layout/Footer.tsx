@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Linkedin, Instagram, Mail } from "lucide-react";
+import { Linkedin, Instagram, Mail, Github } from "lucide-react";
 import { SOCIAL_LINKS, SITE_CONFIG } from "@/lib/constants";
 
 const footerLinks = [
@@ -52,6 +52,15 @@ export default function Footer() {
               >
                 <Instagram size={14} />
                 Instagram
+              </a>
+              <a
+                href={SOCIAL_LINKS.github}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Github size={14} />
+                GitHub
               </a>
               <a
                 href={`mailto:${SITE_CONFIG.email}`}

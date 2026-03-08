@@ -18,7 +18,9 @@
       "WebFetch(domain:en.wikipedia.org)",
       "Bash(grep:*)",
       "Bash(echo === Atlas V ===:*)",
-      "WebFetch(domain:commons.wikimedia.org)"
+      "WebFetch(domain:commons.wikimedia.org)",
+      "Bash(node:*)",
+      "Bash(do:*)"
     ]
   }
 }

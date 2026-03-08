@@ -12,12 +12,28 @@ import { supabase } from "@/lib/supabase";
 // The daily cron only makes 2-3 requests, well within the 15 req/hr limit.
 const SPACE_DEVS = "https://ll.thespacedevs.com/2.3.0/launches";
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function fetchFromSpaceDevs(url: string) {
   const res = await fetch(url, {
     headers: { "User-Agent": "OrbitIntel/1.0 (leoharling.com)" },
   });
   if (!res.ok) throw new Error(`Space Devs API: ${res.status}`);
   return res.json();
+}
+
+async function fetchAllPages(startUrl: string) {
+  const allResults: unknown[] = [];
+  let url: string | null = startUrl;
+  while (url) {
+    const data = await fetchFromSpaceDevs(url);
+    allResults.push(...(data.results || []));
+    url = data.next || null;
+    if (url) await sleep(2500);
+  }
+  return allResults;
 }
 
 async function upsertCache(key: string, data: unknown) {
@@ -63,11 +79,11 @@ export async function GET(request: Request) {
           continue;
         }
       }
-      const past = await fetchFromSpaceDevs(
+      const pastResults = await fetchAllPages(
         `${SPACE_DEVS}/previous/?limit=100&mode=normal&ordering=-net&net__gte=${y}-01-01T00:00:00Z&net__lte=${y}-12-31T23:59:59Z`
       );
-      await upsertCache(`past_${y}`, past.results || []);
-      results.push(`past_${y}: ${(past.results || []).length} launches`);
+      await upsertCache(`past_${y}`, pastResults);
+      results.push(`past_${y}: ${pastResults.length} launches`);
     }
 
     return NextResponse.json({ ok: true, synced: results });

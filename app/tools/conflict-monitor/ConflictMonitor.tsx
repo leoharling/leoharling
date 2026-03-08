@@ -9,6 +9,7 @@ import ConflictTimeline from "@/components/tools/ConflictTimeline";
 import ActorsPanel from "@/components/tools/ActorsPanel";
 import DiplomaticTracker from "@/components/tools/DiplomaticTracker";
 import HumanitarianDashboard from "@/components/tools/HumanitarianDashboard";
+import type { LiveEvent } from "@/components/tools/ConflictMap";
 import {
   ExternalLink,
   AlertTriangle,
@@ -19,6 +20,7 @@ import {
   Handshake,
   Crosshair,
   Heart,
+  Radio,
 } from "lucide-react";
 
 const ConflictMap = dynamic(
@@ -68,7 +70,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-const REFRESH_INTERVAL = 5 * 60 * 1000;
+// No client-side polling — CDN caching handles freshness (s-maxage on API routes)
 
 type InfoTab = "situations" | "actors" | "diplomacy";
 type SidebarTab = "kpis" | "humanitarian";
@@ -83,6 +85,13 @@ export default function ConflictMonitor() {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("kpis");
   const [focusLocation, setFocusLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Live data from external APIs
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [liveGeoJSON, setLiveGeoJSON] = useState<object | null>(null);
+  const [unhcrStats, setUnhcrStats] = useState<{ refugees: number; asylum_seekers: number; idps: number; year: number } | null>(null);
+  const [liveDataLoading, setLiveDataLoading] = useState(false);
+  const [liveDataFetched, setLiveDataFetched] = useState<string | null>(null);
+
   const selected = useMemo(
     () => conflicts.find((c) => c.id === selectedId)!,
     [selectedId]
@@ -94,6 +103,29 @@ export default function ConflictMonitor() {
     setSidebarTab("kpis");
     setFocusLocation(null);
   }, [selectedId]);
+
+  // Fetch live conflict data (ACLED events, UNHCR, ReliefWeb, DeepState)
+  const fetchLiveData = useCallback(async (conflictId: string) => {
+    setLiveDataLoading(true);
+    try {
+      const res = await fetch(`/api/conflict-data?id=${conflictId}`);
+      if (!res.ok) throw new Error("Failed to fetch live data");
+      const data = await res.json();
+      setLiveEvents(data.liveEvents || []);
+      setLiveGeoJSON(data.deepStateGeoJSON || null);
+      setUnhcrStats(data.unhcr || null);
+      setLiveDataFetched(conflictId);
+    } catch {
+      // keep existing data
+    } finally {
+      setLiveDataLoading(false);
+    }
+  }, []);
+
+  // Fetch live data when conflict changes
+  useEffect(() => {
+    fetchLiveData(selectedId);
+  }, [selectedId, fetchLiveData]);
 
   const fetchNews = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -112,8 +144,6 @@ export default function ConflictMonitor() {
 
   useEffect(() => {
     fetchNews();
-    const interval = setInterval(() => fetchNews(false), REFRESH_INTERVAL);
-    return () => clearInterval(interval);
   }, [fetchNews]);
 
   const filteredNews = useMemo(
@@ -132,7 +162,7 @@ export default function ConflictMonitor() {
 
   // Build available tabs
   const infoTabs: { id: InfoTab; label: string; icon: typeof Crosshair; available: boolean }[] = [
-    { id: "situations", label: "Situations", icon: Crosshair, available: !!(selected.recentEvents?.length) },
+    { id: "situations", label: `Situations${liveEvents.length > 0 ? ` (${liveEvents.length} live)` : ""}`, icon: Crosshair, available: !!(selected.recentEvents?.length) || liveEvents.length > 0 },
     { id: "actors", label: "Key Actors", icon: Users, available: !!(selected.actors?.length) },
     { id: "diplomacy", label: "Diplomacy", icon: Handshake, available: !!selected.diplomatic },
   ];
@@ -155,7 +185,7 @@ export default function ConflictMonitor() {
             </span>
           )}
           <button
-            onClick={() => fetchNews(true)}
+            onClick={() => { fetchNews(true); fetchLiveData(selectedId); }}
             disabled={refreshing}
             className="ml-auto flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-50"
           >
@@ -252,6 +282,8 @@ export default function ConflictMonitor() {
                 onSelectConflict={setSelectedId}
                 focusLocation={focusLocation}
                 onFocused={() => setFocusLocation(null)}
+                liveEvents={liveDataFetched === selectedId ? liveEvents : undefined}
+                liveGeoJSON={selectedId === "ukraine" ? liveGeoJSON : undefined}
               />
             </div>
 
@@ -334,10 +366,11 @@ export default function ConflictMonitor() {
                         {kpi.subtext && <p className="text-[11px] text-muted-foreground">{kpi.subtext}</p>}
                       </div>
                     ))}
+
                   </div>
                 </>
               ) : (
-                selected.humanitarian && <HumanitarianDashboard data={selected.humanitarian} />
+                selected.humanitarian && <HumanitarianDashboard data={selected.humanitarian} unhcr={unhcrStats} />
               )}
             </div>
           </FadeIn>
@@ -367,45 +400,99 @@ export default function ConflictMonitor() {
             </div>
 
             {/* Tab content */}
-            {activeTab === "situations" && selected.recentEvents && selected.recentEvents.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {selected.recentEvents.map((ev, i) => {
-                  const isActive = focusLocation?.lat === ev.lat && focusLocation?.lng === ev.lng;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setFocusLocation({ lat: ev.lat, lng: ev.lng });
-                      }}
-                      className={`flex items-start gap-3 rounded-lg border bg-white/[0.02] px-3 py-2.5 text-left transition-all hover:bg-white/[0.05] ${
-                        isActive ? "border-white/20 bg-white/[0.04]" : "border-white/5"
-                      }`}
-                    >
-                      <span
-                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
-                          boxShadow: `0 0 6px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}`,
-                        }}
-                      />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-semibold leading-tight">{ev.title}</p>
+            {activeTab === "situations" && (
+              <div>
+                {/* Hardcoded context events */}
+                {selected.recentEvents && selected.recentEvents.length > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {selected.recentEvents.map((ev, i) => {
+                      const isActive = focusLocation?.lat === ev.lat && focusLocation?.lng === ev.lng;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setFocusLocation({ lat: ev.lat, lng: ev.lng });
+                          }}
+                          className={`flex items-start gap-3 rounded-lg border bg-white/[0.02] px-3 py-2.5 text-left transition-all hover:bg-white/[0.05] ${
+                            isActive ? "border-white/20 bg-white/[0.04]" : "border-white/5"
+                          }`}
+                        >
                           <span
-                            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                            className="mt-1 h-2 w-2 shrink-0 rounded-full"
                             style={{
-                              backgroundColor: (EVENT_TYPE_COLORS[ev.type] || "#ef4444") + "18",
-                              color: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                              backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                              boxShadow: `0 0 6px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}`,
                             }}
-                          >
-                            {EVENT_TYPE_LABELS[ev.type] || ev.type}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{ev.description}</p>
-                      </div>
-                    </button>
-                  );
-                })}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-semibold leading-tight">{ev.title}</p>
+                              <span
+                                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                                style={{
+                                  backgroundColor: (EVENT_TYPE_COLORS[ev.type] || "#ef4444") + "18",
+                                  color: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                                }}
+                              >
+                                {EVENT_TYPE_LABELS[ev.type] || ev.type}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{ev.description}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Live ACLED events */}
+                {liveEvents.length > 0 && (
+                  <div className="mt-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <Radio size={12} className="text-green-400" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-green-400">
+                        Live Events (last 30 days via ACLED)
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {liveEvents.length} events
+                      </span>
+                    </div>
+                    <div className="grid gap-1.5 sm:grid-cols-2 max-h-[400px] overflow-y-auto">
+                      {liveEvents.slice(0, 50).map((ev, i) => (
+                        <button
+                          key={`live-${i}`}
+                          onClick={() => {
+                            setFocusLocation({ lat: ev.lat, lng: ev.lng });
+                          }}
+                          className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-left transition-all hover:bg-white/[0.05]"
+                        >
+                          <span
+                            className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                            }}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[11px] font-medium leading-tight">{ev.title}</p>
+                              {ev.date && (
+                                <span className="shrink-0 text-[9px] text-muted-foreground">{ev.date}</span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-[10px] text-muted-foreground leading-snug line-clamp-2">{ev.description}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {liveDataLoading && liveEvents.length === 0 && (
+                  <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                    <RefreshCw size={12} className="animate-spin" />
+                    Loading live events...
+                  </div>
+                )}
               </div>
             )}
 
@@ -479,6 +566,7 @@ export default function ConflictMonitor() {
               ))}
             </div>
           )}
+
         </div>
       </FadeIn>
 
@@ -487,10 +575,9 @@ export default function ConflictMonitor() {
         <div className="mt-8 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3">
           <p className="text-[11px] text-muted-foreground">
             <AlertTriangle size={11} className="mr-1 inline-block" />
-            Data sourced from public reports (UN, UNHCR, health ministries,
-            ACLED). Casualty figures are estimates and may not reflect the
-            latest developments. Front lines and controlled areas are
-            approximate. News refreshes every 5 minutes.
+            Displacement data from UNHCR (updated annually). Ukraine front lines from DeepStateMap (updated daily).
+            News via BBC, Al Jazeera, NY Times, The Guardian. Casualty figures are estimates.
+            Front lines and controlled areas are approximate.
           </p>
         </div>
       </FadeIn>
