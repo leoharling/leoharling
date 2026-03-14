@@ -1,20 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// Supabase table required:
-// CREATE TABLE launch_cache (
-//   cache_key TEXT PRIMARY KEY,
-//   data JSONB NOT NULL,
-//   updated_at TIMESTAMPTZ DEFAULT NOW()
-// );
-
-// Use the prod endpoint for accurate/up-to-date status data.
-// The daily cron only makes 2-3 requests, well within the 15 req/hr limit.
 const SPACE_DEVS = "https://ll.thespacedevs.com/2.3.0/launches";
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 async function fetchFromSpaceDevs(url: string) {
   const res = await fetch(url, {
@@ -22,18 +9,6 @@ async function fetchFromSpaceDevs(url: string) {
   });
   if (!res.ok) throw new Error(`Space Devs API: ${res.status}`);
   return res.json();
-}
-
-async function fetchAllPages(startUrl: string) {
-  const allResults: unknown[] = [];
-  let url: string | null = startUrl;
-  while (url) {
-    const data = await fetchFromSpaceDevs(url);
-    allResults.push(...(data.results || []));
-    url = data.next || null;
-    if (url) await sleep(2500);
-  }
-  return allResults;
 }
 
 async function upsertCache(key: string, data: unknown) {
@@ -45,7 +20,6 @@ async function upsertCache(key: string, data: unknown) {
 }
 
 export async function GET(request: Request) {
-  // Verify cron secret (Vercel sends this automatically for cron jobs)
   const authHeader = request.headers.get("authorization");
   if (
     process.env.CRON_SECRET &&
@@ -57,33 +31,53 @@ export async function GET(request: Request) {
   const results: string[] = [];
 
   try {
-    // 1. Sync upcoming launches
+    // 1. Fetch upcoming launches from API
     const upcoming = await fetchFromSpaceDevs(
-      `${SPACE_DEVS}/upcoming/?limit=20&mode=detailed`
+      `${SPACE_DEVS}/upcoming/?limit=50&mode=detailed`
     );
-    await upsertCache("upcoming", upcoming.results || []);
-    results.push(`upcoming: ${(upcoming.results || []).length} launches`);
+    const upcomingLaunches = (upcoming.results || []) as Record<string, unknown>[];
+    await upsertCache("upcoming", upcomingLaunches);
+    results.push(`upcoming: ${upcomingLaunches.length} launches`);
 
-    // 2. Sync current year and previous year past launches
-    const year = new Date().getFullYear();
-    for (const y of [year, year - 1, year - 2]) {
-      // Check if already cached (previous years don't change)
-      if (y < year) {
-        const { data: existing } = await supabase
-          .from("launch_cache")
-          .select("cache_key")
-          .eq("cache_key", `past_${y}`)
-          .single();
-        if (existing) {
-          results.push(`past_${y}: already cached`);
-          continue;
-        }
+    // 2. Move any completed launches into the past year cache.
+    //    "previous" launches from the API that launched this year get merged
+    //    into past_YYYY so historical data stays current without re-fetching
+    //    entire years.
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const cacheKey = `past_${currentYear}`;
+
+    // Fetch recently completed launches (last 10)
+    const recent = await fetchFromSpaceDevs(
+      `${SPACE_DEVS}/previous/?limit=10&mode=normal&ordering=-net&net__gte=${currentYear}-01-01T00:00:00Z`
+    );
+    const recentLaunches = (recent.results || []) as Record<string, unknown>[];
+
+    if (recentLaunches.length > 0) {
+      // Load existing cache for current year
+      const { data: existing } = await supabase
+        .from("launch_cache")
+        .select("data")
+        .eq("cache_key", cacheKey)
+        .single();
+
+      const cached = (existing?.data || []) as Record<string, unknown>[];
+
+      // Merge: add new launches not already in cache (by id)
+      const cachedIds = new Set(cached.map((l) => l.id));
+      const newLaunches = recentLaunches.filter((l) => !cachedIds.has(l.id));
+
+      if (newLaunches.length > 0) {
+        const merged = [...cached, ...newLaunches].sort((a, b) => {
+          const aNet = String(a.net || "");
+          const bNet = String(b.net || "");
+          return bNet.localeCompare(aNet); // newest first
+        });
+        await upsertCache(cacheKey, merged);
+        results.push(`past_${currentYear}: added ${newLaunches.length} new (total ${merged.length})`);
+      } else {
+        results.push(`past_${currentYear}: up to date (${cached.length})`);
       }
-      const pastResults = await fetchAllPages(
-        `${SPACE_DEVS}/previous/?limit=100&mode=normal&ordering=-net&net__gte=${y}-01-01T00:00:00Z&net__lte=${y}-12-31T23:59:59Z`
-      );
-      await upsertCache(`past_${y}`, pastResults);
-      results.push(`past_${y}: ${pastResults.length} launches`);
     }
 
     return NextResponse.json({ ok: true, synced: results });

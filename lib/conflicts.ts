@@ -99,6 +99,12 @@ export interface DiplomaticLandscape {
   entries: DiplomaticEntry[];
 }
 
+export interface TerritorySnapshot {
+  date: string;
+  label: string;
+  geojson: object;
+}
+
 export interface Conflict {
   id: string;
   name: string;

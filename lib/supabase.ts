@@ -27,3 +27,37 @@ export interface ContactSubmission {
   message: string;
   created_at: string;
 }
+
+export interface ConflictTerritory {
+  id: string;
+  conflict_id: string;
+  date: string;
+  label: string;
+  geojson: object;
+  created_at: string;
+}
+
+export interface UCDPEvent {
+  id: number;
+  conflict_id: string;
+  year: number;
+  type_of_violence: number;
+  conflict_name: string | null;
+  dyad_name: string | null;
+  side_a: string | null;
+  side_b: string | null;
+  latitude: number;
+  longitude: number;
+  date_start: string | null;
+  date_end: string | null;
+  best: number;
+  high: number;
+  low: number;
+  deaths_civilians: number;
+  number_of_sources: number;
+  source_headline: string | null;
+  where_description: string | null;
+  country: string | null;
+  region: string | null;
+  created_at: string;
+}

@@ -15,6 +15,8 @@ import {
   type NearbyStar,
   type NearbyGalaxy,
 } from "@/lib/space-data";
+import { type DeepSpaceProbe } from "@/lib/deep-space-probes";
+import ProbeInfoPanel from "@/components/space/ProbeInfoPanel";
 import FadeIn from "@/components/ui/FadeIn";
 import dynamic from "next/dynamic";
 
@@ -1026,6 +1028,7 @@ export default function DeepSpaceView() {
   const [selectedStar, setSelectedStar] = useState<NearbyStar | null>(null);
   const [selectedGalaxy, setSelectedGalaxy] = useState<NearbyGalaxy | null>(null);
   const [showSolInfo, setShowSolInfo] = useState(false);
+  const [selectedProbe, setSelectedProbe] = useState<DeepSpaceProbe | null>(null);
 
   const bgStars = useMemo(
     () =>
@@ -1048,6 +1051,7 @@ export default function DeepSpaceView() {
     setSelectedStar(null);
     setSelectedGalaxy(null);
     setShowSolInfo(false);
+    setSelectedProbe(null);
   }, []);
 
   const goNext = useCallback(() => {
@@ -1065,7 +1069,7 @@ export default function DeepSpaceView() {
   // Background click → zoom out one level
   const handleBackgroundClick = useCallback(() => {
     // If something is selected, deselect first
-    if (selectedPlanet || selectedStar || selectedGalaxy || showSolInfo) {
+    if (selectedPlanet || selectedStar || selectedGalaxy || showSolInfo || selectedProbe) {
       clearSelections();
       return;
     }
@@ -1074,7 +1078,7 @@ export default function DeepSpaceView() {
     if (idx < VIEW_ORDER.length - 1) {
       setViewMode(VIEW_ORDER[idx + 1]);
     }
-  }, [viewMode, selectedPlanet, selectedStar, selectedGalaxy, showSolInfo, clearSelections]);
+  }, [viewMode, selectedPlanet, selectedStar, selectedGalaxy, showSolInfo, selectedProbe, clearSelections]);
 
   // Sol click: first click → show info, second click → zoom to solar system
   const handleSolClick = useCallback(() => {
@@ -1136,8 +1140,16 @@ export default function DeepSpaceView() {
                 onSelectPlanet={(p) => {
                   setSelectedStar(null);
                   setSelectedGalaxy(null);
+                  setSelectedProbe(null);
                   setSelectedPlanet(p);
                 }}
+                onSelectProbe={(probe) => {
+                  setSelectedPlanet(null);
+                  setSelectedStar(null);
+                  setSelectedGalaxy(null);
+                  setSelectedProbe(probe);
+                }}
+                selectedProbeName={selectedProbe?.name ?? null}
               />
             )}
           </motion.div>
@@ -1302,6 +1314,14 @@ export default function DeepSpaceView() {
           </AnimatePresence>
           <AnimatePresence>
             {selectedPlanet && <PlanetDetailView planet={selectedPlanet} onClose={() => setSelectedPlanet(null)} />}
+          </AnimatePresence>
+          <AnimatePresence>
+            {selectedProbe && viewMode === "solar-system" && (
+              <ProbeInfoPanel
+                probe={selectedProbe}
+                onClose={() => setSelectedProbe(null)}
+              />
+            )}
           </AnimatePresence>
 
           {/* Navigation — prev/next arrows */}

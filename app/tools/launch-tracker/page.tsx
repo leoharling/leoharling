@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarClock, History, Rocket as RocketIcon } from "lucide-react";
+import { Loader2, CalendarClock, History, Rocket as RocketIcon, X, Globe2 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const SpaceportGlobe = dynamic(
+  () => import("@/components/space/SpaceportGlobe"),
+  { ssr: false }
+);
 import { AnimatePresence } from "framer-motion";
 import SectionHeading from "@/components/ui/SectionHeading";
 import LaunchCard from "@/components/tools/LaunchCard";
@@ -29,9 +35,10 @@ interface Launch {
 }
 
 
-type Tab = "upcoming" | "past" | "rockets";
+type Tab = "globe" | "upcoming" | "past" | "rockets";
 
 const TABS: { key: Tab; label: string; icon: typeof CalendarClock }[] = [
+  { key: "globe", label: "Globe", icon: Globe2 },
   { key: "upcoming", label: "Upcoming", icon: CalendarClock },
   { key: "past", label: "Past Launches", icon: History },
   { key: "rockets", label: "Rockets", icon: RocketIcon },
@@ -45,6 +52,15 @@ export default function LaunchTrackerPage() {
   const [filter, setFilter] = useState("All");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [selectedLaunch, setSelectedLaunch] = useState<Launch | null>(null);
+  const [vehicleFilter, setVehicleFilter] = useState<string | null>(null);
+  const [pastYearHint, setPastYearHint] = useState<number | "all" | undefined>(undefined);
+
+  const handleViewLaunches = (rocketName: string, targetTab: "upcoming" | "past") => {
+    setVehicleFilter(rocketName);
+    setTab(targetTab);
+    setFilter("All");
+    setPastYearHint(targetTab === "past" ? "all" : undefined);
+  };
 
   useEffect(() => {
     fetch("/api/launches?type=upcoming")
@@ -89,13 +105,18 @@ export default function LaunchTrackerPage() {
     return [{ label: "All", value: "All" }, ...entries.map(([label, value]) => ({ label, value }))];
   }, [launches]);
 
-  const filtered =
-    filter === "All"
-      ? launches
-      : launches.filter((l) => {
-          const short = SHORT_NAMES[l.launch_service_provider.name] || l.launch_service_provider.name;
-          return short === filter;
-        });
+  const filtered = launches.filter((l) => {
+    if (filter !== "All") {
+      const short = SHORT_NAMES[l.launch_service_provider.name] || l.launch_service_provider.name;
+      if (short !== filter) return false;
+    }
+    if (vehicleFilter) {
+      const configName = l.rocket.configuration.name.toLowerCase().replace(/-/g, " ");
+      const filterName = vehicleFilter.toLowerCase().replace(/-/g, " ");
+      if (!configName.includes(filterName)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-6 pt-8 pb-16">
@@ -112,7 +133,7 @@ export default function LaunchTrackerPage() {
           return (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => { setTab(t.key); setVehicleFilter(null); setPastYearHint(undefined); }}
               className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
                 tab === t.key
                   ? "bg-accent text-white shadow-lg shadow-accent/20"
@@ -125,6 +146,11 @@ export default function LaunchTrackerPage() {
           );
         })}
       </div>
+
+      {/* Globe tab */}
+      {tab === "globe" && (
+        <SpaceportGlobe launches={launches} />
+      )}
 
       {/* Upcoming tab */}
       {tab === "upcoming" && (
@@ -145,6 +171,23 @@ export default function LaunchTrackerPage() {
               </button>
             ))}
           </div>
+
+          {/* Vehicle filter pill */}
+          {vehicleFilter && (
+            <div className="mb-6 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Rocket:</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent">
+                <RocketIcon size={11} />
+                {vehicleFilter}
+                <button
+                  onClick={() => setVehicleFilter(null)}
+                  className="ml-1 rounded-full p-0.5 hover:bg-accent/20"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            </div>
+          )}
 
           {loading ? (
             <div className="flex items-center justify-center py-24">
@@ -201,10 +244,16 @@ export default function LaunchTrackerPage() {
       )}
 
       {/* Past launches tab */}
-      {tab === "past" && <PastLaunchesTab />}
+      {tab === "past" && (
+        <PastLaunchesTab
+          vehicleFilter={vehicleFilter}
+          onClearVehicleFilter={() => { setVehicleFilter(null); setPastYearHint(undefined); }}
+          yearHint={pastYearHint}
+        />
+      )}
 
       {/* Rockets tab */}
-      {tab === "rockets" && <RocketsTab />}
+      {tab === "rockets" && <RocketsTab onViewLaunches={handleViewLaunches} />}
 
       {/* Launch detail modal */}
       <AnimatePresence>

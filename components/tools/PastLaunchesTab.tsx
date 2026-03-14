@@ -112,20 +112,34 @@ function launchUrl(slug: string) {
 }
 
 const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: currentYear - 2005 }, (_, i) => currentYear - i);
+const YEARS = Array.from({ length: currentYear - 1956 }, (_, i) => currentYear - i);
 
-export default function PastLaunchesTab() {
+export default function PastLaunchesTab({
+  vehicleFilter,
+  onClearVehicleFilter,
+  yearHint,
+}: {
+  vehicleFilter?: string | null;
+  onClearVehicleFilter?: () => void;
+  yearHint?: number | "all";
+}) {
   const [launches, setLaunches] = useState<PastLaunch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [year, setYear] = useState(currentYear);
+  const [year, setYear] = useState<number | "all">(yearHint || currentYear);
   const [aggTab, setAggTab] = useState<AggKey>("provider");
   const [activeFilter, setActiveFilter] = useState<{ key: AggKey; value: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [yearOpen, setYearOpen] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
 
-  const fetchYear = useCallback((y: number) => {
+  useEffect(() => {
+    if (yearHint !== undefined) {
+      setYear(yearHint);
+    }
+  }, [yearHint]);
+
+  const fetchYear = useCallback((y: number | "all") => {
     setLoading(true);
     setError(null);
     setActiveFilter(null);
@@ -169,11 +183,21 @@ export default function PastLaunchesTab() {
   const maxCount = aggData.length ? aggData[0][1] : 1;
 
   const filteredLaunches = useMemo(() => {
-    if (!activeFilter) return launches;
-    return launches.filter(
-      (l) => getLaunchAggValue(l, activeFilter.key) === activeFilter.value
-    );
-  }, [launches, activeFilter]);
+    let result = launches;
+    if (vehicleFilter) {
+      result = result.filter((l) => {
+        const configName = l.rocket.configuration.name.toLowerCase().replace(/-/g, " ");
+        const filterName = vehicleFilter.toLowerCase().replace(/-/g, " ");
+        return configName.includes(filterName);
+      });
+    }
+    if (activeFilter) {
+      result = result.filter(
+        (l) => getLaunchAggValue(l, activeFilter.key) === activeFilter.value
+      );
+    }
+    return result;
+  }, [launches, activeFilter, vehicleFilter]);
 
   const displayedLaunches = showAll ? filteredLaunches : filteredLaunches.slice(0, 30);
 
@@ -212,11 +236,22 @@ export default function PastLaunchesTab() {
             onClick={() => setYearOpen(!yearOpen)}
             className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2.5 text-sm font-medium transition-all hover:bg-white/10"
           >
-            {year}
+            {year === "all" ? "All Time" : year}
             <ChevronDown size={14} className={`text-muted-foreground transition-transform ${yearOpen ? "rotate-180" : ""}`} />
           </button>
           {yearOpen && (
-            <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-28 overflow-y-auto rounded-lg border border-white/10 bg-card shadow-xl">
+            <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-32 overflow-y-auto rounded-lg border border-white/10 bg-card shadow-xl">
+              <button
+                onClick={() => {
+                  setYear("all");
+                  setYearOpen(false);
+                }}
+                className={`block w-full border-b border-white/5 px-4 py-2 text-left text-sm font-medium transition-all hover:bg-white/10 ${
+                  year === "all" ? "bg-accent/20 text-accent" : "text-muted-foreground"
+                }`}
+              >
+                All Time
+              </button>
               {YEARS.map((y) => (
                 <button
                   key={y}
@@ -235,9 +270,9 @@ export default function PastLaunchesTab() {
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Showing launches from <span className="text-foreground font-medium">{year}</span>
+          Showing launches from <span className="text-foreground font-medium">{year === "all" ? "all time" : year}</span>
           {launches.length > 0 && (
-            <span className="text-muted-foreground"> ({launches.length} most recent{launches.length === 100 ? "+" : ""})</span>
+            <span className="text-muted-foreground"> ({launches.length} launch{launches.length !== 1 ? "es" : ""})</span>
           )}
         </p>
       </div>
@@ -340,6 +375,23 @@ export default function PastLaunchesTab() {
           </div>
         )}
       </div>
+
+      {/* Vehicle filter indicator */}
+      {vehicleFilter && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Rocket:</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent">
+            <Rocket size={11} />
+            {vehicleFilter}
+            <button
+              onClick={onClearVehicleFilter}
+              className="ml-1 rounded-full p-0.5 hover:bg-accent/20"
+            >
+              <X size={10} />
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Active filter indicator */}
       {activeFilter && (

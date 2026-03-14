@@ -5,6 +5,11 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { PLANETS, type Planet } from "@/lib/space-data";
+import {
+  DEEP_SPACE_PROBES,
+  EDGE_INDICATOR_THRESHOLD_AU,
+  type DeepSpaceProbe,
+} from "@/lib/deep-space-probes";
 
 // ── Scene scaling ────────────────────────────────────────────
 function orbitRadius(au: number): number {
@@ -302,13 +307,167 @@ function PlanetBody({
   );
 }
 
+// ── Probe marker ─────────────────────────────────────────────
+function ProbeMarker({
+  probe,
+  isSelected,
+  onSelect,
+}: {
+  probe: DeepSpaceProbe;
+  isSelected: boolean;
+  onSelect: (probe: DeepSpaceProbe) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const isNearby = probe.distanceAU <= EDGE_INDICATOR_THRESHOLD_AU;
+
+  // Position: use orbitRadius for nearby, clamp at edge for far probes
+  const r = isNearby
+    ? orbitRadius(probe.distanceAU)
+    : orbitRadius(30) + 1.5; // just beyond Neptune orbit
+  const angle = (probe.eclipticLonDeg * Math.PI) / 180;
+  const x = Math.cos(angle) * r;
+  const z = Math.sin(angle) * r;
+
+  return (
+    <group position={[x, 0, z]}>
+      {/* Diamond-shaped marker (rotated cube) */}
+      <mesh
+        rotation={[Math.PI / 4, 0, Math.PI / 4]}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(probe);
+        }}
+        onPointerOver={() => {
+          setHovered(true);
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "default";
+        }}
+      >
+        <boxGeometry args={[
+          isSelected ? 0.18 : 0.12,
+          isSelected ? 0.18 : 0.12,
+          isSelected ? 0.18 : 0.12,
+        ]} />
+        <meshBasicMaterial
+          color={probe.status === "active" ? "#22d3ee" : "#6b7280"}
+          transparent
+          opacity={hovered || isSelected ? 1 : 0.7}
+        />
+      </mesh>
+
+      {/* Glow effect when selected */}
+      {isSelected && (
+        <mesh rotation={[Math.PI / 4, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.3, 0.3, 0.3]} />
+          <meshBasicMaterial color="#22d3ee" transparent opacity={0.15} />
+        </mesh>
+      )}
+
+      {/* Label */}
+      <Html
+        distanceFactor={14}
+        style={{ pointerEvents: "none" }}
+        position={[0, 0.25, 0]}
+      >
+        <div
+          className={`whitespace-nowrap text-center text-[9px] font-medium transition-all duration-200 ${
+            hovered || isSelected
+              ? "text-cyan-300 bg-card/90 border border-cyan-500/20 rounded-md px-2 py-0.5 backdrop-blur-sm shadow-lg"
+              : "text-cyan-400/50"
+          }`}
+        >
+          {probe.name}
+          {!isNearby && (
+            <span className="text-[8px] text-cyan-300/40 ml-1">
+              {probe.distanceAU} AU →
+            </span>
+          )}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+// ── Probe trajectory path ────────────────────────────────────
+function ProbeTrajectory({ probe }: { probe: DeepSpaceProbe }) {
+  const line = useMemo(() => {
+    const points = probe.trajectory
+      .filter((wp) => wp.distanceAU <= EDGE_INDICATOR_THRESHOLD_AU)
+      .map((wp) => {
+        const r = orbitRadius(wp.distanceAU);
+        const angle = (wp.eclipticLonDeg * Math.PI) / 180;
+        return new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+      });
+
+    if (points.length < 2) return null;
+
+    const curve = new THREE.CatmullRomCurve3(points);
+    const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(64));
+    const mat = new THREE.LineDashedMaterial({
+      color: "#22d3ee",
+      transparent: true,
+      opacity: 0.6,
+      dashSize: 0.15,
+      gapSize: 0.1,
+    });
+    const l = new THREE.Line(geo, mat);
+    l.computeLineDistances();
+    return l;
+  }, [probe]);
+
+  if (!line) return null;
+
+  return (
+    <>
+      <primitive object={line} />
+      {/* Waypoint markers */}
+      {probe.trajectory
+        .filter((wp) => wp.distanceAU <= EDGE_INDICATOR_THRESHOLD_AU)
+        .map((wp, i) => {
+          const r = orbitRadius(wp.distanceAU);
+          const angle = (wp.eclipticLonDeg * Math.PI) / 180;
+          return (
+            <mesh
+              key={i}
+              position={[Math.cos(angle) * r, 0, Math.sin(angle) * r]}
+            >
+              <sphereGeometry args={[0.06, 12, 12]} />
+              <meshBasicMaterial
+                color={
+                  wp.type === "gravity-assist"
+                    ? "#f59e0b"
+                    : wp.type === "launch"
+                    ? "#22c55e"
+                    : "#22d3ee"
+                }
+              />
+            </mesh>
+          );
+        })}
+    </>
+  );
+}
+
 // ── Scene ────────────────────────────────────────────────────
 function Scene({
   onSelectPlanet,
+  onSelectProbe,
+  selectedProbeName,
 }: {
   onSelectPlanet: (planet: Planet) => void;
+  onSelectProbe: (probe: DeepSpaceProbe | null) => void;
+  selectedProbeName: string | null;
 }) {
-  const handleMiss = useCallback(() => {}, []);
+  const handleMiss = useCallback(() => {
+    onSelectProbe(null); // Clear probe selection on background click
+  }, [onSelectProbe]);
+
+  const selectedProbe = selectedProbeName
+    ? DEEP_SPACE_PROBES.find((p) => p.name === selectedProbeName) ?? null
+    : null;
 
   return (
     <>
@@ -328,6 +487,19 @@ function Scene({
         <PlanetBody key={p.name} planet={p} onSelect={onSelectPlanet} />
       ))}
 
+      {/* Deep space probes */}
+      {DEEP_SPACE_PROBES.map((probe) => (
+        <ProbeMarker
+          key={probe.name}
+          probe={probe}
+          isSelected={selectedProbeName === probe.name}
+          onSelect={onSelectProbe}
+        />
+      ))}
+
+      {/* Selected probe trajectory */}
+      {selectedProbe && <ProbeTrajectory probe={selectedProbe} />}
+
       <OrbitControls
         enablePan={false}
         minDistance={3}
@@ -344,8 +516,12 @@ function Scene({
 // ── Wrapper ──────────────────────────────────────────────────
 export default function SolarSystemScene({
   onSelectPlanet,
+  onSelectProbe,
+  selectedProbeName,
 }: {
   onSelectPlanet: (planet: Planet) => void;
+  onSelectProbe: (probe: DeepSpaceProbe | null) => void;
+  selectedProbeName: string | null;
 }) {
   return (
     <Canvas
@@ -354,7 +530,11 @@ export default function SolarSystemScene({
       gl={{ antialias: true, alpha: true }}
       style={{ background: "transparent" }}
     >
-      <Scene onSelectPlanet={onSelectPlanet} />
+      <Scene
+        onSelectPlanet={onSelectPlanet}
+        onSelectProbe={onSelectProbe}
+        selectedProbeName={selectedProbeName}
+      />
     </Canvas>
   );
 }

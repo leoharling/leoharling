@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/sync-launches",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/sync-ucdp",
+      "schedule": "0 7 * * *"
     }
   ]
 }

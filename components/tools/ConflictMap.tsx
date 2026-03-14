@@ -11,7 +11,7 @@ import Map, {
 import type { MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { feature } from "topojson-client";
-import type { Conflict } from "@/lib/conflicts";
+import type { Conflict, TerritorySnapshot } from "@/lib/conflicts";
 import type { FeatureCollection } from "geojson";
 import type { Topology } from "topojson-specification";
 import MapLayerControls from "./MapLayerControls";
@@ -283,8 +283,21 @@ export interface LiveEvent {
   description: string;
   type: string;
   date?: string;
+  dateISO?: string;
   fatalities?: number;
   source?: string;
+  tier?: "featured" | "notable" | "minor";
+  significance?: number;
+  dyad_name?: string;
+  deaths_civilians?: number;
+}
+
+/** Parse loose date strings like "Feb 2024", "Since Oct 2023", "2024-10-01" */
+function parseDateLoose(dateStr?: string): number | null {
+  if (!dateStr) return null;
+  const cleaned = dateStr.replace(/^Since\s+/i, "");
+  const parsed = new Date(cleaned).getTime();
+  return isNaN(parsed) ? null : parsed;
 }
 
 export default function ConflictMap({
@@ -295,6 +308,8 @@ export default function ConflictMap({
   onFocused,
   liveEvents,
   liveGeoJSON,
+  selectedTime,
+  territorySnapshots,
 }: {
   conflict: Conflict;
   allConflicts: Conflict[];
@@ -303,6 +318,8 @@ export default function ConflictMap({
   onFocused?: () => void;
   liveEvents?: LiveEvent[];
   liveGeoJSON?: object | null;
+  selectedTime?: number | null;
+  territorySnapshots?: TerritorySnapshot[];
 }) {
   const mapRef = useRef<MapRef>(null);
   const [popup, setPopup] = useState<{
@@ -321,6 +338,7 @@ export default function ConflictMap({
     labels: true,
     others: true,
   });
+
 
   const layerToggles: LayerToggle[] = useMemo(() => [
     { id: "territory", label: "Territory", color: conflict.color, enabled: layerVisibility.territory },
@@ -360,8 +378,29 @@ export default function ConflictMap({
   const controlledAreasData = useMemo(() => controlledAreasToGeoJSON(conflict.controlledAreas), [conflict.controlledAreas]);
   const otherConflictsData = useMemo(() => otherConflictsToGeoJSON(allConflicts, conflict.id), [allConflicts, conflict.id]);
 
-  // Determine occupied territory data (prefer live GeoJSON from DeepState)
+  // Determine occupied territory data
+  // When selectedTime is set and we have territory snapshots, use the appropriate snapshot.
+  // Otherwise use current/live data (existing behavior).
   const occupiedTerritoryData = useMemo(() => {
+    // Historical mode — find matching snapshot
+    if (selectedTime != null && territorySnapshots && territorySnapshots.length > 0) {
+      let matched: TerritorySnapshot | null = null;
+      for (const s of territorySnapshots) {
+        const snapTime = new Date(s.date).getTime();
+        if (snapTime <= selectedTime) {
+          matched = s;
+        } else {
+          break; // snapshots are sorted chronologically
+        }
+      }
+      if (matched) {
+        return matched.geojson as FeatureCollection;
+      }
+      // Before first snapshot — show empty
+      return { type: "FeatureCollection" as const, features: [] } as FeatureCollection;
+    }
+
+    // Current/live mode (unchanged existing behavior)
     if (conflict.id === "ukraine" && (liveGeoJSON || externalGeoJSON["ukraine-occupied"])) {
       return (liveGeoJSON as FeatureCollection) || externalGeoJSON["ukraine-occupied"];
     }
@@ -374,7 +413,30 @@ export default function ConflictMap({
       return { type: "FeatureCollection" as const, features: [...gazaFeatures, ...lebanonFeatures] };
     }
     return controlledAreasData;
-  }, [conflict.id, externalGeoJSON, controlledAreasData, liveGeoJSON]);
+  }, [conflict.id, externalGeoJSON, controlledAreasData, liveGeoJSON, selectedTime, territorySnapshots]);
+
+  // Filter events by selected time
+  const filteredRecentEvents = useMemo(() => {
+    if (selectedTime == null) return conflict.recentEvents || [];
+    return (conflict.recentEvents || []).filter((ev) => {
+      const evTime = parseDateLoose(ev.date);
+      if (evTime == null) return true; // undated events always show
+      return evTime <= selectedTime;
+    });
+  }, [conflict.recentEvents, selectedTime]);
+
+  const filteredLiveEvents = useMemo(() => {
+    if (!liveEvents?.length) return [];
+    // Filter UCDP events by selected time on the timeline slider
+    if (selectedTime != null) {
+      return liveEvents.filter((ev) => {
+        if (!ev.dateISO) return true;
+        const evTime = new Date(ev.dateISO).getTime();
+        return evTime <= selectedTime;
+      });
+    }
+    return liveEvents;
+  }, [liveEvents, selectedTime]);
 
   // Safe query for interactive layers
   const safeQuery = useCallback((map: maplibregl.Map, point: maplibregl.PointLike, layers: string[]) => {
@@ -430,6 +492,7 @@ export default function ConflictMap({
         onClick={onMapClick}
         onMouseMove={onMapMouseMove}
         onMouseLeave={() => setPopup(null)}
+
       >
         <FlyToController
           conflictCenter={conflict.center}
@@ -483,8 +546,8 @@ export default function ConflictMap({
           />
         ))}
 
-        {/* ── 5. Pulsing event markers ── */}
-        {layerVisibility.events && conflict.recentEvents?.map((ev, i) => (
+        {/* ── 5. Pulsing event markers (filtered by time) ── */}
+        {layerVisibility.events && filteredRecentEvents.map((ev, i) => (
           <MapDot
             key={`${conflict.id}-ev-${i}`}
             lat={ev.lat}
@@ -499,21 +562,25 @@ export default function ConflictMap({
           />
         ))}
 
-        {/* ── 5b. Live ACLED event markers ── */}
-        {layerVisibility.events && liveEvents?.map((ev, i) => (
-          <MapDot
-            key={`${conflict.id}-live-${i}`}
-            lat={ev.lat}
-            lng={ev.lng}
-            color={EVENT_COLORS[ev.type] || "#ef4444"}
-            size={5}
-            title={ev.title}
-            description={ev.description}
-            type={ev.type}
-            date={ev.date}
-            pulse
-          />
-        ))}
+        {/* ── 5b. UCDP event markers (clustered, always visible) ── */}
+        {layerVisibility.events && filteredLiveEvents.map((ev, i) => {
+          const tier = ev.tier || "notable";
+          const size = tier === "featured" ? 10 : 7;
+          return (
+            <MapDot
+              key={`${conflict.id}-live-${i}`}
+              lat={ev.lat}
+              lng={ev.lng}
+              color={EVENT_COLORS[ev.type] || "#ef4444"}
+              size={size}
+              title={ev.title}
+              description={ev.description}
+              type={ev.type}
+              date={ev.date}
+              pulse
+            />
+          );
+        })}
 
         {/* ── 6. Other conflict markers ── */}
         {layerVisibility.others && (

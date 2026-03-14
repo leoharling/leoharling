@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useMemo, useEffect } from "react";
+import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Crosshair, Scale, Heart, Map, Handshake } from "lucide-react";
 import type { TimelinePhase, TimelineMilestone } from "@/lib/conflicts";
 
@@ -20,14 +20,20 @@ export default function ConflictTimeline({
   phases,
   milestones,
   startDate,
+  selectedTime,
+  onTimeChange,
 }: {
   phases: TimelinePhase[];
   milestones: TimelineMilestone[];
   startDate: string;
+  selectedTime?: number | null;
+  onTimeChange?: (time: number | null) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<TimelineMilestone | null>(null);
   const [mounted, setMounted] = useState(false);
+  const isDragging = useRef(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -38,18 +44,114 @@ export default function ConflictTimeline({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, mounted]);
 
-  const pct = (date: string) => {
+  const pct = useCallback((date: string) => {
     const t = toTimestamp(date);
     return Math.max(0, Math.min(100, ((t - range.start) / range.span) * 100));
-  };
+  }, [range]);
+
+  const pctFromTimestamp = useCallback((t: number) => {
+    return Math.max(0, Math.min(100, ((t - range.start) / range.span) * 100));
+  }, [range]);
+
+  const timestampFromPct = useCallback((p: number) => {
+    return range.start + (p / 100) * range.span;
+  }, [range]);
+
+  // Slider position as percentage
+  const sliderPct = useMemo(() => {
+    if (selectedTime == null) return 100;
+    return pctFromTimestamp(selectedTime);
+  }, [selectedTime, pctFromTimestamp]);
+
+  // Formatted date for slider label
+  const sliderDateLabel = useMemo(() => {
+    if (selectedTime == null) return null;
+    return new Date(selectedTime).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  }, [selectedTime]);
+
+  // Convert pointer X to timeline percentage
+  const pointerToPercent = useCallback((clientX: number) => {
+    const el = timelineRef.current;
+    if (!el) return 100;
+    const rect = el.getBoundingClientRect();
+    const x = clientX - rect.left;
+    return Math.max(0, Math.min(100, (x / rect.width) * 100));
+  }, []);
+
+  // Handle drag events
+  const handlePointerMove = useCallback((e: PointerEvent) => {
+    if (!isDragging.current || !onTimeChange) return;
+    const p = pointerToPercent(e.clientX);
+    // Snap to "now" when within 3% of right edge
+    if (p >= 97) {
+      onTimeChange(null);
+    } else {
+      onTimeChange(timestampFromPct(p));
+    }
+  }, [onTimeChange, pointerToPercent, timestampFromPct]);
+
+  const handlePointerUp = useCallback(() => {
+    isDragging.current = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+  }, [handlePointerMove]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (!onTimeChange) return;
+    e.preventDefault();
+    e.stopPropagation();
+    isDragging.current = true;
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }, [onTimeChange, handlePointerMove, handlePointerUp]);
+
+  // Click on timeline bar to jump to that time
+  const handleTimelineClick = useCallback((e: React.MouseEvent) => {
+    if (!onTimeChange) return;
+    // Don't handle if clicking on a milestone button
+    if ((e.target as HTMLElement).closest("button")) return;
+    const p = pointerToPercent(e.clientX);
+    if (p >= 97) {
+      onTimeChange(null);
+    } else {
+      onTimeChange(timestampFromPct(p));
+    }
+  }, [onTimeChange, pointerToPercent, timestampFromPct]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [handlePointerMove, handlePointerUp]);
+
+  // Handle milestone click — also move slider
+  const handleMilestoneClick = useCallback((m: TimelineMilestone) => {
+    setSelected((prev) => (prev === m ? null : m));
+    if (onTimeChange) {
+      onTimeChange(toTimestamp(m.date));
+    }
+  }, [onTimeChange]);
 
   if (!mounted) return <div style={{ minHeight: 80 }} />;
+
+  const isAtNow = selectedTime == null;
 
   return (
     <div>
       {/* Scrollable timeline */}
       <div ref={scrollRef} className="relative overflow-x-auto pb-2" style={{ minHeight: 80 }}>
-        <div className="relative" style={{ minWidth: 600, height: 64 }}>
+        <div
+          ref={timelineRef}
+          className="relative cursor-pointer"
+          style={{ minWidth: 600, height: 64, touchAction: "none" }}
+          onClick={handleTimelineClick}
+        >
           {/* Phase bands */}
           {phases.map((p) => {
             const left = pct(p.startDate);
@@ -96,7 +198,10 @@ export default function ConflictTimeline({
             return (
               <button
                 key={i}
-                onClick={() => setSelected(isSelected ? null : m)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMilestoneClick(m);
+                }}
                 className={`absolute flex items-center justify-center rounded-full border transition-all ${
                   isSelected
                     ? "border-white/30 bg-white/20 scale-125 z-10"
@@ -116,11 +221,65 @@ export default function ConflictTimeline({
             );
           })}
 
-          {/* Now indicator */}
-          <div className="absolute right-0 top-[22px] flex flex-col items-center">
-            <span className="h-3 w-3 rounded-full bg-white/20 animate-pulse" />
-            <span className="mt-1 text-[8px] text-muted-foreground">Now</span>
+          {/* Slider handle */}
+          <div
+            className="absolute z-20"
+            style={{
+              left: `${sliderPct}%`,
+              top: 0,
+              transform: "translateX(-50%)",
+              height: 64,
+            }}
+            onPointerDown={handlePointerDown}
+          >
+            {/* Vertical line */}
+            <div
+              className="absolute left-1/2 -translate-x-1/2 top-0"
+              style={{
+                width: 2,
+                height: 64,
+                background: isAtNow
+                  ? "rgba(255,255,255,0.15)"
+                  : "rgba(255,255,255,0.4)",
+              }}
+            />
+            {/* Grab handle circle */}
+            <div
+              className={`absolute left-1/2 -translate-x-1/2 top-[22px] rounded-full border transition-all ${
+                isAtNow
+                  ? "bg-white/20 border-white/20 animate-pulse"
+                  : "bg-white/80 border-white/40 shadow-md shadow-white/10"
+              }`}
+              style={{
+                width: 14,
+                height: 14,
+                cursor: "grab",
+              }}
+            />
+            {/* Date label (shown when not at "now") */}
+            {!isAtNow && sliderDateLabel && (
+              <div
+                className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[9px] font-medium text-white/80"
+                style={{ bottom: "calc(100% + 4px)" }}
+              >
+                {sliderDateLabel}
+              </div>
+            )}
           </div>
+
+          {/* "Now" label — always visible at right edge */}
+          {!isAtNow && (
+            <div
+              className="absolute right-0 top-[22px] flex flex-col items-center cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTimeChange?.(null);
+              }}
+            >
+              <span className="h-3 w-3 rounded-full bg-white/10" />
+              <span className="mt-1 text-[8px] text-muted-foreground hover:text-white/60 transition-colors">Now</span>
+            </div>
+          )}
 
           {/* Year markers */}
           {(() => {
@@ -142,6 +301,21 @@ export default function ConflictTimeline({
           })()}
         </div>
       </div>
+
+      {/* "Return to Now" bar */}
+      {!isAtNow && (
+        <div className="flex items-center justify-center gap-2 mt-1">
+          <span className="text-[10px] text-muted-foreground">
+            Viewing: {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </span>
+          <button
+            onClick={() => onTimeChange?.(null)}
+            className="text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+          >
+            Return to Now
+          </button>
+        </div>
+      )}
 
       {/* Selected milestone detail */}
       {selected && (

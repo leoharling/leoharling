@@ -14,6 +14,8 @@ import {
   Check,
   Plus,
   ArrowUpDown,
+  CalendarClock,
+  History,
 } from "lucide-react";
 import {
   ROCKETS,
@@ -175,11 +177,13 @@ function RocketModal({
   isComparing,
   onToggleCompare,
   onClose,
+  onViewLaunches,
 }: {
   rocket: RocketType;
   isComparing: boolean;
   onToggleCompare: () => void;
   onClose: () => void;
+  onViewLaunches?: (rocketName: string, tab: "upcoming" | "past") => void;
 }) {
   const [variantId, setVariantId] = useState<string | undefined>(undefined);
   const rocket = resolveVariant(baseRocket, variantId);
@@ -336,6 +340,34 @@ function RocketModal({
               </div>
             )}
 
+            {/* View launches */}
+            {onViewLaunches && (
+              <div className="mb-3 flex gap-2">
+                {rocket.status !== "retired" && (
+                  <button
+                    onClick={() => {
+                      onViewLaunches(baseRocket.name, "upcoming");
+                      onClose();
+                    }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/5 px-4 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-accent/10 hover:text-accent"
+                  >
+                    <CalendarClock size={14} />
+                    Upcoming Launches
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    onViewLaunches(baseRocket.name, "past");
+                    onClose();
+                  }}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/5 px-4 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-accent/10 hover:text-accent"
+                >
+                  <History size={14} />
+                  Past Launches
+                </button>
+              </div>
+            )}
+
             {/* Compare button */}
             <button
               onClick={onToggleCompare}
@@ -391,11 +423,13 @@ function RocketCard({
   isComparing,
   onToggleCompare,
   onClick,
+  onViewLaunches,
 }: {
   rocket: RocketType;
   isComparing: boolean;
   onToggleCompare: () => void;
   onClick: () => void;
+  onViewLaunches?: (rocketName: string, tab: "upcoming" | "past") => void;
 }) {
   return (
     <div
@@ -461,6 +495,34 @@ function RocketCard({
             </span>
           )}
         </div>
+
+        {/* Launch buttons */}
+        {onViewLaunches && (
+          <div className="mt-3 flex gap-2 border-t border-white/5 pt-3">
+            {rocket.status !== "retired" && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewLaunches(rocket.name, "upcoming");
+                }}
+                className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-all hover:bg-accent/10 hover:text-accent"
+              >
+                <CalendarClock size={11} />
+                Upcoming
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewLaunches(rocket.name, "past");
+              }}
+              className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-all hover:bg-accent/10 hover:text-accent"
+            >
+              <History size={11} />
+              Past Launches
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -819,7 +881,7 @@ function getSuccessRate(r: RocketType): number {
   return total > 0 ? r.successfulLaunches / total : -1;
 }
 
-export default function RocketsTab() {
+export default function RocketsTab({ onViewLaunches }: { onViewLaunches?: (rocketName: string, tab: "upcoming" | "past") => void }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -1035,6 +1097,7 @@ export default function RocketsTab() {
             isComparing={compareIds.includes(rocket.id)}
             onToggleCompare={() => toggleCompare(rocket.id)}
             onClick={() => setSelectedRocket(rocket)}
+            onViewLaunches={onViewLaunches}
           />
         ))}
       </div>
@@ -1053,6 +1116,7 @@ export default function RocketsTab() {
             isComparing={compareIds.includes(selectedRocket.id)}
             onToggleCompare={() => toggleCompare(selectedRocket.id)}
             onClose={() => setSelectedRocket(null)}
+            onViewLaunches={onViewLaunches}
           />
         )}
       </AnimatePresence>

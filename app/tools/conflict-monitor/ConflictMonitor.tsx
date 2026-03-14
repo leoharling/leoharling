@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { conflicts, getDaysSince } from "@/lib/conflicts";
+import type { TerritorySnapshot } from "@/lib/conflicts";
 import FadeIn from "@/components/ui/FadeIn";
 import EscalationBadge from "@/components/tools/EscalationBadge";
 import ConflictTimeline from "@/components/tools/ConflictTimeline";
@@ -85,6 +86,10 @@ export default function ConflictMonitor() {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("kpis");
   const [focusLocation, setFocusLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Timeline slider state
+  const [selectedTime, setSelectedTime] = useState<number | null>(null);
+  const [territorySnapshots, setTerritorySnapshots] = useState<TerritorySnapshot[]>([]);
+
   // Live data from external APIs
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   const [liveGeoJSON, setLiveGeoJSON] = useState<object | null>(null);
@@ -97,11 +102,27 @@ export default function ConflictMonitor() {
     [selectedId]
   );
 
-  // Reset tabs on conflict change
+  // Reset tabs and timeline on conflict change
   useEffect(() => {
     setActiveTab("situations");
     setSidebarTab("kpis");
     setFocusLocation(null);
+    setSelectedTime(null);
+  }, [selectedId]);
+
+  // Fetch historical territory snapshots
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/conflict-territories?id=${selectedId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setTerritorySnapshots(data.snapshots || []);
+        }
+      } catch {
+        setTerritorySnapshots([]);
+      }
+    })();
   }, [selectedId]);
 
   // Fetch live conflict data (ACLED events, UNHCR, ReliefWeb, DeepState)
@@ -151,6 +172,16 @@ export default function ConflictMonitor() {
     [news, selectedId]
   );
 
+  // Filter UCDP events by timeline slider position
+  const filteredEvents = useMemo(() => {
+    if (!liveEvents.length) return [];
+    if (selectedTime == null) return liveEvents;
+    return liveEvents.filter((ev) => {
+      if (!ev.dateISO) return true;
+      return new Date(ev.dateISO).getTime() <= selectedTime;
+    });
+  }, [liveEvents, selectedTime]);
+
   const days = getDaysSince(selected.startDate);
 
   const globalStats = [
@@ -162,7 +193,7 @@ export default function ConflictMonitor() {
 
   // Build available tabs
   const infoTabs: { id: InfoTab; label: string; icon: typeof Crosshair; available: boolean }[] = [
-    { id: "situations", label: `Situations${liveEvents.length > 0 ? ` (${liveEvents.length} live)` : ""}`, icon: Crosshair, available: !!(selected.recentEvents?.length) || liveEvents.length > 0 },
+    { id: "situations", label: `Situations${filteredEvents.length > 0 ? ` (${filteredEvents.length})` : ""}`, icon: Crosshair, available: liveEvents.length > 0 },
     { id: "actors", label: "Key Actors", icon: Users, available: !!(selected.actors?.length) },
     { id: "diplomacy", label: "Diplomacy", icon: Handshake, available: !!selected.diplomatic },
   ];
@@ -265,6 +296,8 @@ export default function ConflictMonitor() {
               phases={selected.timeline.phases}
               milestones={selected.timeline.milestones}
               startDate={selected.startDate}
+              selectedTime={selectedTime}
+              onTimeChange={setSelectedTime}
             />
           </div>
         </FadeIn>
@@ -284,6 +317,8 @@ export default function ConflictMonitor() {
                 onFocused={() => setFocusLocation(null)}
                 liveEvents={liveDataFetched === selectedId ? liveEvents : undefined}
                 liveGeoJSON={selectedId === "ukraine" ? liveGeoJSON : undefined}
+                selectedTime={selectedTime}
+                territorySnapshots={territorySnapshots}
               />
             </div>
 
@@ -402,95 +437,67 @@ export default function ConflictMonitor() {
             {/* Tab content */}
             {activeTab === "situations" && (
               <div>
-                {/* Hardcoded context events */}
-                {selected.recentEvents && selected.recentEvents.length > 0 && (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {selected.recentEvents.map((ev, i) => {
-                      const isActive = focusLocation?.lat === ev.lat && focusLocation?.lng === ev.lng;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            setFocusLocation({ lat: ev.lat, lng: ev.lng });
-                          }}
-                          className={`flex items-start gap-3 rounded-lg border bg-white/[0.02] px-3 py-2.5 text-left transition-all hover:bg-white/[0.05] ${
-                            isActive ? "border-white/20 bg-white/[0.04]" : "border-white/5"
-                          }`}
-                        >
-                          <span
-                            className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                            style={{
-                              backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
-                              boxShadow: `0 0 6px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}`,
-                            }}
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-semibold leading-tight">{ev.title}</p>
-                              <span
-                                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                                style={{
-                                  backgroundColor: (EVENT_TYPE_COLORS[ev.type] || "#ef4444") + "18",
-                                  color: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
-                                }}
-                              >
-                                {EVENT_TYPE_LABELS[ev.type] || ev.type}
-                              </span>
-                            </div>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{ev.description}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Live ACLED events */}
-                {liveEvents.length > 0 && (
-                  <div className="mt-4">
-                    <div className="mb-2 flex items-center gap-2">
+                {filteredEvents.length > 0 && (
+                  <>
+                    <div className="mb-3 flex items-center gap-2">
                       <Radio size={12} className="text-green-400" />
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-green-400">
-                        Live Events (last 30 days via ACLED)
+                        Significant Events (UCDP)
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        {liveEvents.length} events
+                        {filteredEvents.length} events{selectedTime != null ? " (filtered)" : ""}
                       </span>
                     </div>
-                    <div className="grid gap-1.5 sm:grid-cols-2 max-h-[400px] overflow-y-auto">
-                      {liveEvents.slice(0, 50).map((ev, i) => (
-                        <button
-                          key={`live-${i}`}
-                          onClick={() => {
-                            setFocusLocation({ lat: ev.lat, lng: ev.lng });
-                          }}
-                          className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-left transition-all hover:bg-white/[0.05]"
-                        >
-                          <span
-                            className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
-                            style={{
-                              backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                    <div className="grid gap-2 sm:grid-cols-2 max-h-[500px] overflow-y-auto">
+                      {filteredEvents.map((ev, i) => {
+                        const isActive = focusLocation?.lat === ev.lat && focusLocation?.lng === ev.lng;
+                        const isFeatured = ev.tier === "featured";
+                        return (
+                          <button
+                            key={`ev-${i}`}
+                            onClick={() => {
+                              setFocusLocation({ lat: ev.lat, lng: ev.lng });
                             }}
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-[11px] font-medium leading-tight">{ev.title}</p>
-                              {ev.date && (
-                                <span className="shrink-0 text-[9px] text-muted-foreground">{ev.date}</span>
-                              )}
+                            className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-all hover:bg-white/[0.05] ${
+                              isActive ? "border-white/20 bg-white/[0.04]" : "border-white/5 bg-white/[0.02]"
+                            }`}
+                          >
+                            <span
+                              className={`mt-1 shrink-0 rounded-full ${isFeatured ? "h-2.5 w-2.5" : "h-2 w-2"}`}
+                              style={{
+                                backgroundColor: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                                boxShadow: isFeatured ? `0 0 8px ${EVENT_TYPE_COLORS[ev.type] || "#ef4444"}` : undefined,
+                              }}
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className={`leading-tight ${isFeatured ? "text-xs font-semibold" : "text-[11px] font-medium"}`}>{ev.title}</p>
+                                <span
+                                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                                  style={{
+                                    backgroundColor: (EVENT_TYPE_COLORS[ev.type] || "#ef4444") + "18",
+                                    color: EVENT_TYPE_COLORS[ev.type] || "#ef4444",
+                                  }}
+                                >
+                                  {EVENT_TYPE_LABELS[ev.type] || ev.type}
+                                </span>
+                                {ev.date && (
+                                  <span className="shrink-0 text-[9px] text-muted-foreground">{ev.date}</span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-[10px] text-muted-foreground leading-snug line-clamp-2">{ev.description}</p>
                             </div>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground leading-snug line-clamp-2">{ev.description}</p>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
-                  </div>
+                  </>
                 )}
 
                 {liveDataLoading && liveEvents.length === 0 && (
                   <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                     <RefreshCw size={12} className="animate-spin" />
-                    Loading live events...
+                    Loading events...
                   </div>
                 )}
               </div>
@@ -575,7 +582,7 @@ export default function ConflictMonitor() {
         <div className="mt-8 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3">
           <p className="text-[11px] text-muted-foreground">
             <AlertTriangle size={11} className="mr-1 inline-block" />
-            Displacement data from UNHCR (updated annually). Ukraine front lines from DeepStateMap (updated daily).
+            Conflict events from UCDP (Uppsala Conflict Data Program). Displacement data from UNHCR (updated annually). Ukraine front lines from DeepStateMap (updated daily).
             News via BBC, Al Jazeera, NY Times, The Guardian. Casualty figures are estimates.
             Front lines and controlled areas are approximate.
           </p>

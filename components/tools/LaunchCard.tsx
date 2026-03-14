@@ -65,7 +65,7 @@ export default function LaunchCard({
   const isPast = new Date(launchDate).getTime() < Date.now();
 
   return (
-    <div className="glass-card overflow-hidden transition-all duration-300 hover:scale-[1.01]">
+    <div className="glass-card flex h-full flex-col overflow-hidden transition-all duration-300 hover:scale-[1.01]">
       {imageUrl && (
         <div
           className="h-40 bg-cover bg-center"
@@ -74,13 +74,13 @@ export default function LaunchCard({
           <div className="h-full w-full bg-gradient-to-t from-card to-transparent" />
         </div>
       )}
-      <div className="p-6">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+      <div className="flex flex-1 flex-col p-6">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="truncate rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
             {provider}
           </span>
           <span
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${
               isPast
                 ? "bg-muted/20 text-muted-foreground"
                 : status === "Go for Launch"
@@ -92,19 +92,19 @@ export default function LaunchCard({
           </span>
         </div>
 
-        <h3 className="text-lg font-semibold leading-tight">{name}</h3>
+        <h3 className="truncate text-base font-semibold">{name}</h3>
 
-        <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Rocket size={14} className="text-accent" />
-            {vehicle}
+        <div className="mt-3 space-y-1.5 text-sm text-muted-foreground">
+          <div className="flex items-start gap-2">
+            <Rocket size={14} className="mt-0.5 shrink-0 text-accent" />
+            <span className="line-clamp-1">{vehicle}</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <MapPin size={14} className="mt-0.5 shrink-0 text-accent" />
+            <span className="line-clamp-1">{padName}, {padLocation}</span>
           </div>
           <div className="flex items-center gap-2">
-            <MapPin size={14} className="text-accent" />
-            {padName}, {padLocation}
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock size={14} className="text-accent" />
+            <Clock size={14} className="shrink-0 text-accent" />
             {new Date(launchDate).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
@@ -116,13 +116,13 @@ export default function LaunchCard({
         </div>
 
         {missionDescription && (
-          <p className="mt-3 text-sm text-muted-foreground leading-relaxed line-clamp-2">
+          <p className="mt-3 mb-2 text-sm text-muted-foreground leading-relaxed line-clamp-2">
             {missionDescription}
           </p>
         )}
 
         {!isPast && countdown && (
-          <div className="mt-4 rounded-lg bg-accent/5 px-4 py-2 text-center">
+          <div className="mt-auto pt-4 rounded-lg bg-accent/5 px-4 py-3 text-center">
             <p className="text-xs text-muted-foreground">T-minus</p>
             <p className="font-mono text-lg font-semibold text-accent">
               {countdown}
