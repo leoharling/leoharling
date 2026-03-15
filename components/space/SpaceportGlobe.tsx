@@ -58,7 +58,7 @@ function Earth() {
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
+        <sphereGeometry args={[EARTH_RADIUS, 128, 64]} />
         <meshStandardMaterial map={texture} />
       </mesh>
       {/* Atmosphere glow */}
@@ -145,49 +145,171 @@ function SpaceportMarker({
 }
 
 // ── CameraController ──────────────────────────────────────
-// Animates to target then stops. OrbitControls always remains enabled.
+// Three modes:
+// - spaceport selected: zoom in close to the pad
+// - launch selected: pull back and tilt to show the trajectory arc
+// - nothing selected: default view, hand off to OrbitControls
 function CameraController({
   target,
+  trajectoryView,
   controlsRef,
 }: {
   target: [number, number, number] | null;
+  trajectoryView: { padLat: number; padLon: number; azimuthDeg: number } | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   controlsRef: React.RefObject<any>;
 }) {
   const { camera } = useThree();
   const goalPos = useRef(new THREE.Vector3(0, 2, 5));
   const goalLookAt = useRef(new THREE.Vector3(0, 0, 0));
-  const animating = useRef(false);
+  const framesLeft = useRef(0); // finite frame count, not distance-based
+
+  // Stable keys to detect real changes
+  const tvKey = trajectoryView ? `${trajectoryView.padLat},${trajectoryView.padLon},${trajectoryView.azimuthDeg}` : null;
+  const tKey = target ? target.join(",") : null;
 
   useEffect(() => {
-    if (target) {
-      const targetVec = new THREE.Vector3(...target);
-      const dir = targetVec.clone().normalize();
+    if (trajectoryView) {
+      // Position camera so the launch site is centered but we're far enough
+      // to see the ascent and the start of the orbit. The user can zoom out
+      // further to see the full orbit.
+      const padPos = new THREE.Vector3(
+        ...latLonToVector3(trajectoryView.padLat, trajectoryView.padLon, EARTH_RADIUS)
+      );
+      const padDir = padPos.clone().normalize();
+
+      // Camera directly above the pad area, pulled out to a comfortable distance
+      goalPos.current.copy(padDir.clone().multiplyScalar(EARTH_RADIUS + 3.0));
+      goalLookAt.current.copy(padDir.clone().multiplyScalar(EARTH_RADIUS));
+    } else if (target) {
+      const dir = new THREE.Vector3(...target).normalize();
       goalPos.current.copy(dir.multiplyScalar(EARTH_RADIUS + 1.5));
-      goalLookAt.current.copy(targetVec);
+      goalLookAt.current.set(...(target as [number, number, number]));
     } else {
       goalPos.current.set(0, 2, 5);
       goalLookAt.current.set(0, 0, 0);
     }
-    animating.current = true;
-  }, [target]);
+    // Animate for exactly 60 frames (~1s at 60fps), then stop completely
+    framesLeft.current = 60;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tvKey, tKey]);
 
   useFrame(() => {
-    if (!animating.current || !controlsRef.current) return;
+    if (framesLeft.current <= 0 || !controlsRef.current) return;
+    framesLeft.current--;
 
-    camera.position.lerp(goalPos.current, 0.06);
-    controlsRef.current.target.lerp(goalLookAt.current, 0.06);
+    camera.position.lerp(goalPos.current, 0.08);
+    controlsRef.current.target.lerp(goalLookAt.current, 0.08);
     controlsRef.current.update();
-
-    if (camera.position.distanceTo(goalPos.current) < 0.01) {
-      animating.current = false;
-    }
+    // After 60 frames: completely stop. OrbitControls takes over.
   });
 
   return null;
 }
 
+// ── Range safety corridors ────────────────────────────────
+// Rockets must fly over ocean. Returns [minAz, maxAz] in degrees.
+function getSafeAzimuthRange(lat: number, lon: number): [number, number] {
+  if (lon > -85 && lon < -70 && lat > 20 && lat < 45) return [35, 120];    // US East Coast
+  if (lon >= -125 && lon < -110 && lat > 25 && lat < 45) return [170, 250]; // US West Coast
+  if (lon > -100 && lon < -90 && lat > 24 && lat < 30) return [80, 120];   // Boca Chica
+  if (lon < -140 && lat > 50) return [170, 230];                            // Kodiak
+  if (lon > -55 && lon < -48 && lat > 0 && lat < 10) return [0, 100];      // Kourou
+  if (lon > 55 && lon < 75 && lat > 40 && lat < 50) return [30, 100];      // Baikonur
+  if (lon > 35 && lon < 50 && lat > 60) return [0, 80];                    // Plesetsk
+  if (lon > 125 && lon < 140 && lat > 45 && lat < 55) return [50, 120];    // Vostochny
+  if (lon > 75 && lon < 85 && lat > 10 && lat < 20) return [80, 140];      // India
+  if (lon > 128 && lon < 135 && lat > 28 && lat < 35) return [150, 220];   // Japan
+  if (lon > 125 && lon < 130 && lat > 33 && lat < 36) return [160, 210];   // S. Korea
+  if (lon > 108 && lon < 112 && lat > 18 && lat < 21) return [100, 180];   // Wenchang
+  if (lon > 95 && lon < 108 && lat > 25 && lat < 45) return [110, 180];    // China inland
+  if (lon > 34 && lon < 36 && lat > 31 && lat < 33) return [250, 310];     // Israel
+  if (lon > 175 && lat < -35) return [30, 120];                             // NZ
+  if (lon > -50 && lon < -40 && lat > -5 && lat < 0) return [0, 80];       // Brazil
+  return [0, 360];
+}
+
+function clampAzimuth(azDeg: number, range: [number, number]): number {
+  const az = ((azDeg % 360) + 360) % 360;
+  const [min, max] = range;
+  if (max > 360) {
+    if (az >= min || az <= max - 360) return az;
+  } else {
+    if (az >= min && az <= max) return az;
+  }
+  const d1 = Math.min(Math.abs(az - min), Math.abs(az - min + 360), Math.abs(az - min - 360));
+  const d2 = Math.min(Math.abs(az - max), Math.abs(az - max + 360), Math.abs(az - max - 360));
+  return ((d1 <= d2 ? min : max) % 360 + 360) % 360;
+}
+
+// ── Shared: compute ascent + insertion from pad ──────────
+function computeAscent(padLat: number, padLon: number, inclDeg: number, parkingAlt: number) {
+  const latRad = (padLat * Math.PI) / 180;
+  const inclRad = (inclDeg * Math.PI) / 180;
+  const padPos = new THREE.Vector3(...latLonToVector3(padLat, padLon, EARTH_RADIUS * 1.005));
+  const padUp = padPos.clone().normalize();
+  const worldY = new THREE.Vector3(0, 1, 0);
+  const padEast = new THREE.Vector3().crossVectors(worldY, padUp).normalize();
+  if (padEast.lengthSq() < 0.001) padEast.set(1, 0, 0);
+  const padNorth = new THREE.Vector3().crossVectors(padUp, padEast).normalize();
+
+  const cosLat = Math.cos(latRad);
+  let optAzDeg = 90;
+  if (cosLat > 0.001) {
+    const sinAz = Math.max(-1, Math.min(1, Math.cos(inclRad) / cosLat));
+    let azRad = Math.asin(sinAz);
+    if (inclDeg > 90) azRad = Math.PI - azRad;
+    optAzDeg = (azRad * 180) / Math.PI;
+  }
+  const safeRange = getSafeAzimuthRange(padLat, padLon);
+  const launchAzDeg = clampAzimuth(optAzDeg, safeRange);
+  const launchAzRad = (launchAzDeg * Math.PI) / 180;
+
+  const downrange = new THREE.Vector3()
+    .addScaledVector(padNorth, Math.cos(launchAzRad))
+    .addScaledVector(padEast, Math.sin(launchAzRad))
+    .normalize();
+  const pitchAxis = new THREE.Vector3().crossVectors(padUp, downrange).normalize();
+
+  return { padUp, padEast, padNorth, downrange, pitchAxis, launchAzDeg };
+}
+
+function computeTargetNormal(insDir: THREE.Vector3, parkN: THREE.Vector3, inclDeg: number) {
+  const inclRad = (inclDeg * Math.PI) / 180;
+  const cosI = Math.cos(inclRad), sinI = Math.sin(inclRad);
+  const Ax = insDir.x, By = insDir.y, Cz = insDir.z;
+  const Rxz = Math.sqrt(Ax * Ax + Cz * Cz);
+
+  if (Rxz > 0.001 && Math.abs(sinI) > 0.001) {
+    const ratio = (-cosI * By / sinI) / Rxz;
+    const phi = Math.atan2(Cz, Ax);
+    if (Math.abs(ratio) <= 1) {
+      const a1 = phi + Math.acos(Math.max(-1, Math.min(1, ratio)));
+      const a2 = phi - Math.acos(Math.max(-1, Math.min(1, ratio)));
+      const n1 = new THREE.Vector3(sinI * Math.cos(a1), cosI, sinI * Math.sin(a1)).normalize();
+      const n2 = new THREE.Vector3(sinI * Math.cos(a2), cosI, sinI * Math.sin(a2)).normalize();
+      const targN = (Math.abs(parkN.dot(n1)) > Math.abs(parkN.dot(n2))) ? n1 : n2;
+      if (parkN.dot(targN) < 0) targN.negate();
+      return targN;
+    }
+  }
+  return parkN.clone();
+}
+
 // ── LaunchTrajectory ──────────────────────────────────────
+// Three visualization models based on orbit category:
+//
+// CIRCULAR (LEO/SSO/Polar):
+//   ascent → direct insertion into circular Earth orbit at target altitude
+//
+// TRANSFER (GTO/MEO/HEO):
+//   ascent → parking orbit coast → transfer burn → elliptical arc
+//   rising to apogee at target altitude
+//
+// ESCAPE (Lunar/Interplanetary):
+//   ascent → parking orbit coast → injection burn → hyperbolic arc
+//   departing Earth (shown as a spiral outward)
+//
 function LaunchTrajectory({
   padLat,
   padLon,
@@ -197,71 +319,205 @@ function LaunchTrajectory({
   padLon: number;
   template: TrajectoryTemplate;
 }) {
-  const points = useMemo(() => {
-    const start = new THREE.Vector3(
-      ...latLonToVector3(padLat, padLon, EARTH_RADIUS * 1.005)
-    );
-    const altScale = Math.min(template.altitudeKm / 35786, 1); // normalize to GTO max
-    const maxHeight = EARTH_RADIUS * (0.3 + altScale * 1.2);
+  const PARKING_ALT = 0.08;
+  const PARKING_R = EARTH_RADIUS + PARKING_ALT;
 
-    // Build curve from ascent profile
-    const curvePoints: THREE.Vector3[] = [];
-    const dir = start.clone().normalize();
+  const { ascentPts, orbitPts, stagingMarkers } = useMemo(() => {
+    const { padUp, pitchAxis } = computeAscent(padLat, padLon, template.inclinationDeg, PARKING_ALT);
 
-    for (const [progress, altFrac] of template.ascentProfile) {
-      const height = EARTH_RADIUS + altFrac * maxHeight * 0.5;
-      // Rotate along the trajectory direction
-      const angle = progress * Math.PI * 0.4;
-      const rotAxis = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
-      const point = dir
-        .clone()
-        .applyAxisAngle(rotAxis, angle)
-        .multiplyScalar(height);
-      curvePoints.push(point);
+    // ── Ascent (shared by all categories) ────────────────
+    const arcAngle = Math.PI * 0.15;
+    const raw: THREE.Vector3[] = [];
+    for (const [p, af] of template.ascentProfile) {
+      const alt = EARTH_RADIUS * 1.005 + af * PARKING_ALT;
+      const po = Math.min(p * 2.5, 1);
+      const ga = po * p * arcAngle;
+      raw.push(padUp.clone().applyAxisAngle(pitchAxis, ga).multiplyScalar(alt));
+    }
+    const ascent = new THREE.CatmullRomCurve3(raw).getPoints(80);
+
+    // Insertion point & velocity
+    const insDir = ascent[ascent.length - 1].clone().normalize();
+    const insVel = ascent[ascent.length - 1].clone().sub(ascent[ascent.length - 2]).normalize();
+    const parkN = new THREE.Vector3().crossVectors(insDir, insVel).normalize();
+    const targN = computeTargetNormal(insDir, parkN, template.inclinationDeg);
+
+    // ── Generate orbital path per category ────────────────
+    const orbit: THREE.Vector3[] = [];
+    const S = 200;
+    const cat = template.category;
+
+    if (cat === "circular") {
+      // ─── CIRCULAR: LEO / SSO / Polar ───────────────────
+      // Direct insertion, full orbit at target altitude.
+      // Smooth plane change over first 20%, rise to target alt quickly.
+      const targetAlt = 0.15 + Math.min(template.altitudeKm / 35786, 1) * 0.6;
+      const targetR = EARTH_RADIUS + targetAlt;
+      const fullArc = Math.PI * 1.95;
+
+      for (let i = 0; i <= S; i++) {
+        const t = i / S;
+        const angle = t * fullArc;
+        const pct = Math.min(t / 0.2, 1);
+        const smooth = pct * pct * (3 - 2 * pct);
+        const normal = parkN.clone().lerp(targN, smooth).normalize();
+        const r = PARKING_R + Math.min(t * 3, 1) * (targetR - PARKING_R);
+        orbit.push(insDir.clone().applyAxisAngle(normal, angle).multiplyScalar(r));
+      }
+
+    } else if (cat === "transfer") {
+      // ─── TRANSFER: GTO / MEO / HEO ────────────────────
+      // Phase 1: coast in parking orbit ~90° (coast to transfer burn point)
+      // Phase 2: transfer burn — radius rises from perigee to apogee
+      //          following an elliptical profile
+      // Phase 3: coast at apogee altitude
+      const targetAlt = 0.15 + Math.min(template.altitudeKm / 35786, 1) * 0.6;
+      const targetR = EARTH_RADIUS + targetAlt;
+      const fullArc = Math.PI * 1.9;
+
+      const coastFrac = 0.15;   // 15% in parking orbit
+      const transferFrac = 0.5; // next 50% is the transfer ellipse
+      // remaining 35% at apogee
+
+      for (let i = 0; i <= S; i++) {
+        const t = i / S;
+        const angle = t * fullArc;
+
+        // Plane change during transfer phase
+        const pct = Math.min(t / (coastFrac + transferFrac), 1);
+        const smooth = pct * pct * (3 - 2 * pct);
+        const normal = parkN.clone().lerp(targN, smooth).normalize();
+
+        let r: number;
+        if (t < coastFrac) {
+          // Phase 1: parking orbit coast
+          r = PARKING_R;
+        } else if (t < coastFrac + transferFrac) {
+          // Phase 2: transfer — sinusoidal rise (elliptical shape)
+          const tf = (t - coastFrac) / transferFrac;
+          const elliptical = 0.5 - 0.5 * Math.cos(tf * Math.PI);
+          r = PARKING_R + elliptical * (targetR - PARKING_R);
+        } else {
+          // Phase 3: at apogee altitude
+          r = targetR;
+        }
+
+        orbit.push(insDir.clone().applyAxisAngle(normal, angle).multiplyScalar(r));
+      }
+
+    } else {
+      // ─── ESCAPE: Lunar / Interplanetary ─────────────────
+      // Phase 1: coast in parking orbit ~120° to injection point
+      // Phase 2: injection burn — hyperbolic departure, radius increases
+      //          rapidly and continuously (no closed orbit)
+      const fullArc = Math.PI * 1.5; // less than full orbit — it's escaping
+
+      const coastFrac = 0.25;  // 25% in parking orbit
+      const escapeR = EARTH_RADIUS + 2.5; // visual limit of the escape arc
+
+      for (let i = 0; i <= S; i++) {
+        const t = i / S;
+        const angle = t * fullArc;
+
+        // Slight plane change during injection
+        const pct = Math.min(t / 0.4, 1);
+        const smooth = pct * pct * (3 - 2 * pct);
+        const normal = parkN.clone().lerp(targN, smooth).normalize();
+
+        let r: number;
+        if (t < coastFrac) {
+          // Parking orbit coast
+          r = PARKING_R;
+        } else {
+          // Hyperbolic departure — accelerating outward
+          const ef = (t - coastFrac) / (1 - coastFrac);
+          // Exponential-ish growth for hyperbolic feel
+          r = PARKING_R + (escapeR - PARKING_R) * (1 - Math.exp(-3 * ef));
+        }
+
+        orbit.push(insDir.clone().applyAxisAngle(normal, angle).multiplyScalar(r));
+      }
     }
 
-    return new THREE.CatmullRomCurve3(curvePoints).getPoints(64);
+    // Staging markers (skip Liftoff at pad)
+    const markers = template.stagingEvents
+      .filter((e) => e.progressFraction > 0)
+      .map((evt) => ({
+        position: ascent[Math.min(Math.floor(evt.progressFraction * (ascent.length - 1)), ascent.length - 1)],
+        label: evt.label,
+      }));
+
+    return { ascentPts: ascent, orbitPts: orbit, stagingMarkers: markers };
   }, [padLat, padLon, template]);
 
-  // Trajectory line object (same pattern as OrbitPath in SolarSystemScene)
-  const trajectoryLine = useMemo(() => {
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({
-      color: "#f59e0b",
-      transparent: true,
-      opacity: 0.8,
-    });
-    return new THREE.Line(geo, mat);
-  }, [points]);
+  // ── Render: solid ascent tube, dashed orbit line ────────
+  const ascentTube = useMemo(() => {
+    if (ascentPts.length < 2) return null;
+    const c = new THREE.CatmullRomCurve3(ascentPts);
+    return new THREE.Mesh(
+      new THREE.TubeGeometry(c, 64, 0.01, 8, false),
+      new THREE.MeshBasicMaterial({ color: "#f59e0b", side: THREE.DoubleSide })
+    );
+  }, [ascentPts]);
 
-  // Orbit ring
-  const orbitRadius = useMemo(() => {
-    const altScale = Math.min(template.altitudeKm / 35786, 1);
-    return EARTH_RADIUS + 0.15 + altScale * 0.6;
-  }, [template.altitudeKm]);
+  const orbitColor = template.category === "escape" ? "#a78bfa" : "#60a5fa";
+
+  const orbitLine = useMemo(() => {
+    if (orbitPts.length < 2) return null;
+    const g = new THREE.BufferGeometry().setFromPoints(orbitPts);
+    const m = new THREE.LineDashedMaterial({
+      color: orbitColor,
+      dashSize: 0.05,
+      gapSize: 0.03,
+    });
+    const l = new THREE.Line(g, m);
+    l.computeLineDistances();
+    return l;
+  }, [orbitPts, orbitColor]);
+
+  const insertionLabel =
+    template.category === "circular" ? "Orbit insertion" :
+    template.category === "transfer" ? "Transfer burn" :
+    "Injection burn";
 
   return (
     <group>
-      {/* Trajectory arc -- using primitive to match codebase pattern */}
-      <primitive object={trajectoryLine} />
-      {/* Target orbit ring -- tilted by inclination */}
-      <mesh
-        rotation={[
-          Math.PI / 2 - (template.inclinationDeg * Math.PI) / 180,
-          0,
-          0,
-        ]}
-      >
-        <ringGeometry
-          args={[orbitRadius - 0.005, orbitRadius + 0.005, 128]}
-        />
-        <meshBasicMaterial
-          color="#60a5fa"
-          transparent
-          opacity={0.4}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+      {ascentTube && <primitive object={ascentTube} />}
+      {orbitLine && <primitive object={orbitLine} />}
+      {stagingMarkers.map((m, i) => (
+        <group key={i} position={m.position}>
+          <mesh>
+            <sphereGeometry args={[0.005, 8, 8]} />
+            <meshBasicMaterial color="#fbbf24" />
+          </mesh>
+          <mesh>
+            <sphereGeometry args={[0.012, 8, 8]} />
+            <meshBasicMaterial color="#f59e0b" transparent opacity={0.15} />
+          </mesh>
+          <Html style={{ pointerEvents: "none", transform: "translate(8px, -50%)" }} center={false}>
+            <div className="whitespace-nowrap rounded bg-black/85 px-1.5 py-0.5 border border-amber-500/30 leading-none shadow-lg shadow-amber-500/10" style={{ fontSize: 10 }}>
+              <span className="text-amber-300">{m.label}</span>
+            </div>
+          </Html>
+        </group>
+      ))}
+      {ascentPts.length > 0 && (
+        <group position={ascentPts[ascentPts.length - 1]}>
+          <mesh>
+            <sphereGeometry args={[0.006, 10, 10]} />
+            <meshBasicMaterial color={orbitColor} />
+          </mesh>
+          <mesh>
+            <sphereGeometry args={[0.015, 10, 10]} />
+            <meshBasicMaterial color={orbitColor} transparent opacity={0.15} />
+          </mesh>
+          <Html style={{ pointerEvents: "none", transform: "translate(8px, -50%)" }} center={false}>
+            <div className="whitespace-nowrap rounded bg-black/85 px-1.5 py-0.5 border border-blue-500/30 leading-none shadow-lg shadow-blue-500/10" style={{ fontSize: 10 }}>
+              <span style={{ color: orbitColor }}>{insertionLabel}</span>
+            </div>
+          </Html>
+        </group>
+      )}
     </group>
   );
 }
@@ -305,8 +561,7 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
     );
   }, [launches, selectedLocation]);
 
-  // Only auto-zoom to spaceport when first selected (not when a launch is picked)
-  // When a launch is selected, let the user freely zoom out to see trajectory
+  // Camera: zoom to spaceport when selected, or pull back for trajectory view
   const cameraTarget = useMemo(() => {
     if (!selectedLocation || selectedLaunch) return null;
     return latLonToVector3(
@@ -321,8 +576,26 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
     return getTrajectoryTemplate(selectedLaunch.mission?.orbit?.abbrev);
   }, [selectedLaunch]);
 
+  // Compute launch azimuth for camera positioning
+  const trajectoryView = useMemo(() => {
+    if (!selectedLaunch || !selectedLocation) return null;
+    const latRad = (selectedLocation.lat * Math.PI) / 180;
+    const inclRad = ((trajectoryTemplate?.inclinationDeg ?? 51.6) * Math.PI) / 180;
+    const cosLat = Math.cos(latRad);
+    let optAzDeg = 90;
+    if (cosLat > 0.001) {
+      const sinAz = Math.max(-1, Math.min(1, Math.cos(inclRad) / cosLat));
+      let azRad = Math.asin(sinAz);
+      if ((trajectoryTemplate?.inclinationDeg ?? 0) > 90) azRad = Math.PI - azRad;
+      optAzDeg = (azRad * 180) / Math.PI;
+    }
+    const safeRange = getSafeAzimuthRange(selectedLocation.lat, selectedLocation.lon);
+    const azDeg = clampAzimuth(optAzDeg, safeRange);
+    return { padLat: selectedLocation.lat, padLon: selectedLocation.lon, azimuthDeg: azDeg };
+  }, [selectedLaunch, selectedLocation, trajectoryTemplate]);
+
   return (
-    <div className="relative h-[600px] w-full rounded-xl overflow-hidden border border-white/5">
+    <div className="relative h-full w-full overflow-hidden">
       <Canvas
         camera={{ position: [0, 2, 5], fov: 45 }}
         dpr={[1, 2]}
@@ -372,12 +645,12 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
           fade
           speed={1}
         />
-        <CameraController target={cameraTarget} controlsRef={controlsRef} />
+        <CameraController target={cameraTarget} trajectoryView={trajectoryView} controlsRef={controlsRef} />
         <OrbitControls
           ref={controlsRef}
           enablePan={false}
-          minDistance={1.8}
-          maxDistance={8}
+          minDistance={2.15}
+          maxDistance={12}
           autoRotate={!selectedLocation}
           autoRotateSpeed={0.3}
         />
@@ -437,24 +710,72 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
             </button>
           </div>
 
-          {locationLaunches.length === 0 ? (
+          {/* Selected launch detail */}
+          {selectedLaunch && trajectoryTemplate && (
+            <div className="space-y-2">
+              <button
+                onClick={() => setSelectedLaunch(null)}
+                className="text-[10px] text-accent hover:text-accent/80 flex items-center gap-1"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M6 2L3 5L6 8" stroke="currentColor" strokeWidth="1.2" />
+                </svg>
+                Back to launches
+              </button>
+              <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 space-y-2">
+                <p className="text-xs font-semibold">{selectedLaunch.name}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {selectedLaunch.rocket.configuration.name}
+                </p>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60">Orbit</p>
+                    <p className="text-[11px] font-medium text-blue-400">{trajectoryTemplate.orbitName}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60">Altitude</p>
+                    <p className="text-[11px] font-medium">{trajectoryTemplate.altitudeKm.toLocaleString()} km</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60">Inclination</p>
+                    <p className="text-[11px] font-medium">{trajectoryTemplate.inclinationDeg}°</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60">Date</p>
+                    <p className="text-[11px] font-medium">
+                      {new Date(selectedLaunch.net).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </p>
+                  </div>
+                </div>
+                {selectedLaunch.mission?.description && (
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-1 line-clamp-3">
+                    {selectedLaunch.mission.description}
+                  </p>
+                )}
+              </div>
+              {/* Legend */}
+              <div className="flex items-center gap-3 text-[9px] text-muted-foreground/70 pt-1">
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-0.5 bg-amber-400 rounded-full inline-block" /> Ascent
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-0.5 bg-blue-400 rounded-full inline-block opacity-50" style={{ borderBottom: "1px dashed" }} /> Orbit
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Launch list */}
+          {!selectedLaunch && locationLaunches.length === 0 ? (
             <p className="text-xs text-muted-foreground py-4 text-center">
               No upcoming launches
             </p>
-          ) : (
+          ) : !selectedLaunch ? (
             locationLaunches.map((launch) => (
               <button
                 key={launch.id}
-                onClick={() =>
-                  setSelectedLaunch(
-                    selectedLaunch?.id === launch.id ? null : launch
-                  )
-                }
-                className={`w-full text-left rounded-lg border p-3 transition-colors ${
-                  selectedLaunch?.id === launch.id
-                    ? "border-accent bg-accent/10"
-                    : "border-white/5 hover:border-white/15 bg-white/5"
-                }`}
+                onClick={() => setSelectedLaunch(launch)}
+                className="w-full text-left rounded-lg border p-3 transition-colors border-white/5 hover:border-white/15 bg-white/5"
               >
                 <p className="text-xs font-medium truncate">{launch.name}</p>
                 <p className="text-[10px] text-muted-foreground mt-1">
@@ -476,7 +797,7 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
                 </div>
               </button>
             ))
-          )}
+          ) : null}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useMemo, useState, useCallback, useEffect } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Suspense, useRef, useMemo, useState, useCallback, useEffect } from "react";
+import { Canvas, useFrame, useThree, useLoader } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import {
@@ -216,22 +216,42 @@ function createEarthTexture(): THREE.CanvasTexture {
 }
 
 function Earth() {
-  const texture = useMemo(() => createEarthTexture(), []);
+  // Use Blue Marble texture (same as SpaceportGlobe) for visual continuity
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const placeholder = useLoader(
+    THREE.TextureLoader,
+    "/textures/earth-blue-marble-1k.jpg"
+  );
+  const [fullTexture, setFullTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    const path = isMobile
+      ? "/textures/earth-blue-marble-4k.jpg"
+      : "/textures/earth-blue-marble-8k.jpg";
+    loader.load(path, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      setFullTexture(tex);
+    });
+  }, [isMobile]);
+
+  const texture = fullTexture ?? placeholder;
+  texture.colorSpace = THREE.SRGBColorSpace;
 
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
-        <meshBasicMaterial map={texture} />
+        <sphereGeometry args={[EARTH_RADIUS, 128, 64]} />
+        <meshStandardMaterial map={texture} />
       </mesh>
 
-      {/* Atmosphere */}
+      {/* Atmosphere — matches SpaceportGlobe */}
       <mesh>
-        <sphereGeometry args={[EARTH_RADIUS * 1.012, 48, 48]} />
+        <sphereGeometry args={[EARTH_RADIUS * 1.015, 48, 48]} />
         <meshBasicMaterial
-          color="#3b82f6"
+          color="#4a9eff"
           transparent
-          opacity={0.035}
+          opacity={0.05}
           side={THREE.BackSide}
         />
       </mesh>
@@ -759,12 +779,14 @@ export default function SatelliteSceneWrapper(
       gl={{ antialias: true, alpha: true }}
       style={{ background: "transparent" }}
     >
-      <Scene
-        {...props}
-        timeSpeed={props.timeSpeed ?? 1}
-        highlightedGroup={props.highlightedGroup ?? null}
-        notableVisible={props.notableVisible ?? true}
-      />
+      <Suspense fallback={null}>
+        <Scene
+          {...props}
+          timeSpeed={props.timeSpeed ?? 1}
+          highlightedGroup={props.highlightedGroup ?? null}
+          notableVisible={props.notableVisible ?? true}
+        />
+      </Suspense>
     </Canvas>
   );
 }

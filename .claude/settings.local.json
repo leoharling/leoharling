@@ -74,7 +74,9 @@
       "Bash(source:*)",
       "Bash(kill:*)",
       "Bash(git add:*)",
-      "Bash(sips:*)"
+      "Bash(sips:*)",
+      "Bash(cd:*)",
+      "Bash(file:*)"
     ]
   }
 }

@@ -2,99 +2,68 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { motion, AnimatePresence } from "framer-motion";
-import RocketSlider from "@/components/space/RocketSlider";
-import SectionHeading from "@/components/ui/SectionHeading";
+import { motion } from "framer-motion";
+import { Map, List } from "lucide-react";
 
+const SpaceMap = dynamic(() => import("@/components/space/SpaceMap"), {
+  ssr: false,
+});
 const LaunchTrackerPage = dynamic(
   () => import("@/app/tools/launch-tracker/page"),
   { ssr: false }
 );
-const SatelliteVisualizerPage = dynamic(
-  () => import("@/app/tools/satellite-visualizer/page"),
-  { ssr: false }
-);
-const DeepSpaceView = dynamic(
-  () => import("@/components/space/DeepSpaceView"),
-  { ssr: false }
-);
+
+type SpaceView = "map" | "launches";
 
 export default function SpacePage() {
-  const [domain, setDomain] = useState(0);
+  const [view, setView] = useState<SpaceView>("map");
 
   return (
     <div className="relative min-h-screen pt-16">
-      {/* Mobile nav — horizontal, pinned to top */}
-      <div className="sticky top-16 z-20 flex justify-center border-b border-white/[0.04] bg-background/80 backdrop-blur-md py-2 md:hidden">
-        <div className="flex gap-3">
-          {["Earth", "Orbit", "Deep Space"].map((label, i) => (
+      {/* Top nav — choose between Space Map and Launch Tracker */}
+      <div className="sticky top-16 z-20 border-b border-white/[0.04] bg-background/80 backdrop-blur-md">
+        <div className="mx-auto max-w-6xl flex items-center gap-1 px-4 py-2">
+          {[
+            { key: "map" as const, label: "Space Map", Icon: Map },
+            { key: "launches" as const, label: "Launch Tracker", Icon: List },
+          ].map(({ key, label, Icon }) => (
             <button
-              key={label}
-              onClick={() => setDomain(i)}
-              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                domain === i
-                  ? "bg-accent text-white"
-                  : "text-muted-foreground bg-white/5"
+              key={key}
+              onClick={() => setView(key)}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                view === key
+                  ? "bg-accent/15 text-accent"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
               }`}
             >
+              <Icon size={16} />
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex">
-        {/* Vertical sidebar — top-aligned, not centered */}
-        <div className="sticky top-16 z-20 hidden h-[calc(100vh-4rem)] shrink-0 border-r border-white/[0.04] md:block">
-          <RocketSlider value={domain} onChange={setDomain} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <AnimatePresence mode="wait">
-            {domain === 0 && (
-              <motion.div
-                key="earth"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <LaunchTrackerPage />
-              </motion.div>
-            )}
-            {domain === 1 && (
-              <motion.div
-                key="orbit"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <SatelliteVisualizerPage />
-              </motion.div>
-            )}
-            {domain === 2 && (
-              <motion.div
-                key="deep-space"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="mx-auto max-w-6xl px-6 pt-8 pb-16">
-                  <SectionHeading
-                    title="Deep Space Explorer"
-                    subtitle="Navigate our solar system and zoom out to explore the local stellar neighborhood within 12 light-years of Earth."
-                    className="mb-6"
-                  />
-                  <DeepSpaceView />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+      {/* Content */}
+      {view === "map" && (
+        <motion.div
+          key="map"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <SpaceMap />
+        </motion.div>
+      )}
+      {view === "launches" && (
+        <motion.div
+          key="launches"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <LaunchTrackerPage />
+        </motion.div>
+      )}
     </div>
   );
 }

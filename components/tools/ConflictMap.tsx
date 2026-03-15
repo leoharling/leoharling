@@ -133,7 +133,7 @@ function HoverTooltip({
         boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
         backdropFilter: "blur(12px)",
         pointerEvents: "none",
-        zIndex: 10,
+        zIndex: 9999,
         whiteSpace: "normal",
       }}
     >
@@ -195,7 +195,7 @@ function MapDot({
   const hitSize = Math.max(size + 20, 28);
 
   return (
-    <Marker longitude={lng} latitude={lat} anchor="center" style={hovered ? { zIndex: 50 } : undefined}>
+    <Marker longitude={lng} latitude={lat} anchor="center" style={{ zIndex: hovered ? 9999 : 1 }}>
       <div
         className="cmap-event-marker"
         onMouseEnter={() => setHovered(true)}

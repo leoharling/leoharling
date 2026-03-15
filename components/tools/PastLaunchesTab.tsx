@@ -9,6 +9,8 @@ import {
   Rocket,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   X,
 } from "lucide-react";
@@ -67,7 +69,7 @@ function getCountry(l: PastLaunch): string {
   return l.pad.location.country?.name || "Unknown";
 }
 
-type AggKey = "provider" | "country" | "orbit" | "vehicle" | "status";
+type AggKey = "provider" | "country" | "orbit" | "vehicle" | "status" | "year";
 
 const AGG_TABS: { key: AggKey; label: string }[] = [
   { key: "provider", label: "By Provider" },
@@ -75,6 +77,7 @@ const AGG_TABS: { key: AggKey; label: string }[] = [
   { key: "orbit", label: "By Orbit" },
   { key: "vehicle", label: "By Vehicle" },
   { key: "status", label: "By Outcome" },
+  { key: "year", label: "By Year" },
 ];
 
 function getLaunchAggValue(l: PastLaunch, key: AggKey): string {
@@ -93,6 +96,8 @@ function getLaunchAggValue(l: PastLaunch, key: AggKey): string {
         : l.status.id === 4
           ? "Failure"
           : l.status.abbrev || l.status.name;
+    case "year":
+      return new Date(l.net).getFullYear().toString();
   }
 }
 
@@ -102,13 +107,118 @@ function aggregate(launches: PastLaunch[], key: AggKey) {
     const val = getLaunchAggValue(l, key);
     counts[val] = (counts[val] || 0) + 1;
   }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20);
+  const entries = Object.entries(counts);
+  if (key === "year") {
+    entries.sort((a, b) => b[0].localeCompare(a[0]));
+  } else {
+    entries.sort((a, b) => b[1] - a[1]);
+  }
+  return entries.slice(0, key === "year" ? 100 : 20);
 }
 
 function launchUrl(slug: string) {
   return `https://www.spacelaunchschedule.com/launch/${slug}/`;
+}
+
+/* ── Year Bar Chart ── */
+function YearChart({
+  launches,
+  activeYear,
+  onClickYear,
+}: {
+  launches: PastLaunch[];
+  activeYear: string | null;
+  onClickYear: (year: string) => void;
+}) {
+  const yearData = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of launches) {
+      const yr = new Date(l.net).getFullYear().toString();
+      map.set(yr, (map.get(yr) || 0) + 1);
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([year, count]) => ({ year, count }));
+  }, [launches]);
+
+  if (yearData.length === 0) {
+    return <p className="text-sm text-muted-foreground">No data available.</p>;
+  }
+
+  const maxCount = Math.max(...yearData.map((d) => d.count));
+  const niceMax = Math.ceil(maxCount / 10) * 10 || 10;
+
+  const W = 800;
+  const H = 220;
+  const PAD = { top: 12, right: 12, bottom: 32, left: 36 };
+  const cw = W - PAD.left - PAD.right;
+  const ch = H - PAD.top - PAD.bottom;
+  const baseline = PAD.top + ch;
+
+  const slotW = cw / yearData.length;
+  const barW = Math.max(Math.min(slotW * 0.65, 28), 2);
+  const getX = (i: number) => PAD.left + slotW * i + slotW / 2;
+  const getY = (val: number) => PAD.top + ch - (val / niceMax) * ch;
+
+  const gridCount = 4;
+  const yTicks = Array.from({ length: gridCount + 1 }, (_, i) => {
+    const val = Math.round((niceMax / gridCount) * i);
+    return { val, y: getY(val) };
+  });
+
+  const labelEvery = Math.max(1, Math.ceil(yearData.length / 20));
+
+  return (
+    <div className="overflow-x-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[400px]" preserveAspectRatio="xMidYMid meet">
+        {/* Grid */}
+        {yTicks.map(({ val, y }) => (
+          <g key={val}>
+            {val > 0 && <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="white" strokeOpacity={0.05} />}
+            <text x={PAD.left - 6} y={y + 3} textAnchor="end" fill="white" fillOpacity={0.25} fontSize={9}>
+              {val}
+            </text>
+          </g>
+        ))}
+
+        {/* Bars */}
+        {yearData.map((d, i) => {
+          const x = getX(i);
+          const yTop = getY(d.count);
+          const barH = baseline - yTop;
+          const isActive = activeYear === d.year;
+
+          return (
+            <g key={d.year} onClick={() => onClickYear(d.year)} className="cursor-pointer">
+              <rect x={x - slotW / 2} y={PAD.top} width={slotW} height={ch} fill="transparent" />
+
+              <rect
+                x={x - barW / 2}
+                y={yTop}
+                width={barW}
+                height={barH}
+                rx={Math.min(barW / 2, 2)}
+                fill="white"
+                fillOpacity={isActive ? 0.7 : 0.15}
+              />
+
+              {isActive && (
+                <text x={x} y={yTop - 5} textAnchor="middle" fontSize={10} fontWeight={600} fill="white" fillOpacity={0.9}>
+                  {d.count}
+                </text>
+              )}
+
+              {i % labelEvery === 0 && (
+                <text x={x} y={H - 6} textAnchor="middle" fontSize={9} fill="white" fillOpacity={isActive ? 0.8 : 0.25} fontWeight={isActive ? 600 : 400}>
+                  {d.year}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
 }
 
 const currentYear = new Date().getFullYear();
@@ -127,11 +237,10 @@ export default function PastLaunchesTab({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState<number | "all">(yearHint || currentYear);
-  const [aggTab, setAggTab] = useState<AggKey>("provider");
+  const [aggTab, setAggTab] = useState<AggKey | null>(null);
   const [activeFilter, setActiveFilter] = useState<{ key: AggKey; value: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [yearOpen, setYearOpen] = useState(false);
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   useEffect(() => {
     if (yearHint !== undefined) {
@@ -144,6 +253,7 @@ export default function PastLaunchesTab({
     setError(null);
     setActiveFilter(null);
     setShowAll(false);
+    if (y !== "all") setAggTab((prev) => prev === "year" ? null : prev);
     fetch(`/api/launches?type=past&year=${y}`)
       .then((res) => {
         if (res.status === 429) throw new Error("rate-limit");
@@ -179,7 +289,7 @@ export default function PastLaunchesTab({
     return { total: launches.length, success, fail, providers, countries };
   }, [launches]);
 
-  const aggData = useMemo(() => aggregate(launches, aggTab), [launches, aggTab]);
+  const aggData = useMemo(() => aggTab ? aggregate(launches, aggTab) : [], [launches, aggTab]);
   const maxCount = aggData.length ? aggData[0][1] : 1;
 
   const filteredLaunches = useMemo(() => {
@@ -228,195 +338,197 @@ export default function PastLaunchesTab({
   }
 
   return (
-    <div className="space-y-8">
-      {/* Year selector */}
-      <div className="flex items-center gap-4">
-        <div className="relative">
-          <button
-            onClick={() => setYearOpen(!yearOpen)}
-            className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2.5 text-sm font-medium transition-all hover:bg-white/10"
-          >
-            {year === "all" ? "All Time" : year}
-            <ChevronDown size={14} className={`text-muted-foreground transition-transform ${yearOpen ? "rotate-180" : ""}`} />
-          </button>
-          {yearOpen && (
-            <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-32 overflow-y-auto rounded-lg border border-white/10 bg-card shadow-xl">
-              <button
-                onClick={() => {
-                  setYear("all");
-                  setYearOpen(false);
-                }}
-                className={`block w-full border-b border-white/5 px-4 py-2 text-left text-sm font-medium transition-all hover:bg-white/10 ${
-                  year === "all" ? "bg-accent/20 text-accent" : "text-muted-foreground"
-                }`}
-              >
-                All Time
-              </button>
-              {YEARS.map((y) => (
-                <button
-                  key={y}
-                  onClick={() => {
-                    setYear(y);
-                    setYearOpen(false);
-                  }}
-                  className={`block w-full px-4 py-2 text-left text-sm transition-all hover:bg-white/10 ${
-                    y === year ? "bg-accent/20 text-accent" : "text-muted-foreground"
-                  }`}
-                >
-                  {y}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Showing launches from <span className="text-foreground font-medium">{year === "all" ? "all time" : year}</span>
-          {launches.length > 0 && (
-            <span className="text-muted-foreground"> ({launches.length} launch{launches.length !== 1 ? "es" : ""})</span>
-          )}
-        </p>
-      </div>
-
-      {/* Summary stats */}
-      {stats && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {[
-            { label: "Total Launches", value: stats.total },
-            { label: "Successful", value: stats.success },
-            { label: "Failed", value: stats.fail },
-            { label: "Providers", value: stats.providers },
-            { label: "Countries", value: stats.countries },
-          ].map((s) => (
-            <div key={s.label} className="glass-card p-4 text-center">
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{s.value}</p>
-              {s.label === "Successful" && stats.total > 0 && (
-                <p className="text-xs text-emerald-400">
-                  {((stats.success / stats.total) * 100).toFixed(1)}% rate
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Aggregation panel */}
-      <div className="glass-card p-6">
+    <div className="space-y-6">
+      {/* Header: year nav + inline stats */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        {/* All Time toggle */}
         <button
-          onClick={() => setBreakdownOpen(!breakdownOpen)}
-          className="flex w-full items-center justify-between"
+          onClick={() => setYear(year === "all" ? currentYear : "all")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+            year === "all"
+              ? "bg-accent text-white"
+              : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+          }`}
         >
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Launch Activity Breakdown
-          </h3>
-          <ChevronDown
-            size={16}
-            className={`text-muted-foreground transition-transform ${breakdownOpen ? "rotate-180" : ""}`}
-          />
+          All Time
         </button>
-        {breakdownOpen && (
-          <div className="mt-4">
-            <div className="mb-6 flex flex-wrap gap-2">
-              {AGG_TABS.map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => {
-                    setAggTab(t.key);
-                    if (activeFilter && activeFilter.key !== t.key) {
-                      setActiveFilter(null);
-                    }
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                    aggTab === t.key
-                      ? "bg-accent text-white"
-                      : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-2">
-              {aggData.map(([label, count]) => {
-                const isActive = activeFilter?.key === aggTab && activeFilter?.value === label;
-                return (
+
+        <div className="h-5 w-px bg-white/10" />
+
+        {/* Year stepper */}
+        <div className="flex items-center">
+          <button
+            onClick={() => {
+              const current = typeof year === "number" ? year : currentYear;
+              if (current > 1957) setYear(current - 1);
+            }}
+            className="rounded-l-lg bg-white/5 p-2 text-muted-foreground transition-all hover:bg-white/10 hover:text-foreground"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setYearOpen(!yearOpen)}
+              className={`flex items-center gap-1.5 bg-white/5 px-4 py-2 text-sm font-semibold tabular-nums transition-all hover:bg-white/10 ${
+                year === "all" ? "text-muted-foreground" : "text-foreground"
+              }`}
+            >
+              {typeof year === "number" ? year : currentYear}
+              <ChevronDown size={12} className={`text-muted-foreground transition-transform ${yearOpen ? "rotate-180" : ""}`} />
+            </button>
+            {yearOpen && (
+              <div className="absolute left-1/2 top-full z-20 mt-1 max-h-64 w-24 -translate-x-1/2 overflow-y-auto rounded-lg border border-white/10 bg-card shadow-xl">
+                {YEARS.map((y) => (
                   <button
-                    key={label}
-                    onClick={() => handleBarClick(aggTab, label)}
-                    className={`group flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left transition-all ${
-                      isActive
-                        ? "bg-accent/10"
-                        : activeFilter && activeFilter.key === aggTab
-                          ? "opacity-40 hover:opacity-70"
-                          : "hover:bg-white/[0.03]"
+                    key={y}
+                    onClick={() => {
+                      setYear(y);
+                      setYearOpen(false);
+                    }}
+                    className={`block w-full px-4 py-1.5 text-center text-sm tabular-nums transition-all hover:bg-white/10 ${
+                      y === year ? "bg-accent/20 text-accent" : "text-muted-foreground"
                     }`}
                   >
-                    <span className="w-32 shrink-0 truncate text-right text-sm text-muted-foreground sm:w-44">
-                      {label}
-                    </span>
-                    <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-white/5">
-                      <div
-                        className={`absolute inset-y-0 left-0 rounded-md transition-all duration-500 ${
-                          isActive ? "bg-accent/60" : "bg-accent/40"
-                        }`}
-                        style={{ width: `${(count / maxCount) * 100}%` }}
-                      />
-                      <span className="relative z-10 flex h-full items-center px-2 text-xs font-medium tabular-nums">
-                        {count}
-                      </span>
-                    </div>
+                    {y}
                   </button>
-                );
-              })}
-              {aggData.length === 0 && (
-                <p className="text-sm text-muted-foreground">No data available.</p>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              const current = typeof year === "number" ? year : currentYear;
+              if (current < currentYear) setYear(current + 1);
+            }}
+            className="rounded-r-lg bg-white/5 p-2 text-muted-foreground transition-all hover:bg-white/10 hover:text-foreground"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Inline stats */}
+        {stats && (
+          <div className="ml-auto flex items-center gap-3 text-xs tabular-nums text-muted-foreground">
+            <span><strong className="text-foreground">{stats.total}</strong> launches</span>
+            <span className="text-white/10">|</span>
+            <span><strong className="text-emerald-400">{stats.success}</strong> ok</span>
+            {stats.fail > 0 && (
+              <>
+                <span className="text-white/10">|</span>
+                <span><strong className="text-rose-400">{stats.fail}</strong> failed</span>
+              </>
+            )}
+            {stats.total > 0 && (
+              <>
+                <span className="text-white/10">|</span>
+                <span>{((stats.success / stats.total) * 100).toFixed(1)}%</span>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* Vehicle filter indicator */}
-      {vehicleFilter && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Rocket:</span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent">
-            <Rocket size={11} />
-            {vehicleFilter}
-            <button
-              onClick={onClearVehicleFilter}
-              className="ml-1 rounded-full p-0.5 hover:bg-accent/20"
-            >
-              <X size={10} />
-            </button>
-          </span>
-        </div>
-      )}
-
-      {/* Active filter indicator */}
-      {activeFilter && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Filtered by:</span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-            {activeFilter.value}
-            <button
-              onClick={() => setActiveFilter(null)}
-              className="rounded-full p-0.5 hover:bg-accent/20"
-            >
-              <X size={10} />
-            </button>
-          </span>
+      {/* Active filters */}
+      {(vehicleFilter || activeFilter) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {vehicleFilter && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Rocket size={10} />
+              {vehicleFilter}
+              <button onClick={onClearVehicleFilter} className="ml-0.5 rounded-full p-0.5 hover:bg-white/10 hover:text-foreground">
+                <X size={10} />
+              </button>
+            </span>
+          )}
+          {activeFilter && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+              {activeFilter.value}
+              <button onClick={() => setActiveFilter(null)} className="ml-0.5 rounded-full p-0.5 hover:bg-accent/20">
+                <X size={10} />
+              </button>
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">
-            ({filteredLaunches.length} launch{filteredLaunches.length !== 1 ? "es" : ""})
+            {filteredLaunches.length} result{filteredLaunches.length !== 1 ? "s" : ""}
           </span>
         </div>
       )}
 
-      {/* Past launches list */}
+      {/* Breakdown */}
       <div>
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          {activeFilter ? `Filtered Launches` : `Recent Launches`}
-        </h3>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {AGG_TABS.filter((t) => t.key !== "year" || year === "all").map((t) => (
+            <button
+              key={t.key}
+              onClick={() => {
+                if (aggTab === t.key) {
+                  setAggTab(null);
+                  setActiveFilter(null);
+                } else {
+                  setAggTab(t.key);
+                  if (activeFilter && activeFilter.key !== t.key) {
+                    setActiveFilter(null);
+                  }
+                }
+              }}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                aggTab === t.key
+                  ? "bg-white/15 text-foreground"
+                  : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {aggTab === "year" ? (
+          <YearChart
+            launches={launches}
+            activeYear={activeFilter?.key === "year" ? activeFilter.value : null}
+            onClickYear={(yr) => handleBarClick("year", yr)}
+          />
+        ) : aggTab ? (
+          <div className="space-y-1">
+            {aggData.map(([label, count]) => {
+              const isActive = activeFilter?.key === aggTab && activeFilter?.value === label;
+              return (
+                <button
+                  key={label}
+                  onClick={() => handleBarClick(aggTab, label)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left transition-all ${
+                    isActive
+                      ? "bg-white/[0.04]"
+                      : activeFilter && activeFilter.key === aggTab
+                        ? "opacity-30 hover:opacity-60"
+                        : "hover:bg-white/[0.02]"
+                  }`}
+                >
+                  <span className="w-32 shrink-0 truncate text-right text-xs text-muted-foreground sm:w-40">
+                    {label}
+                  </span>
+                  <div className="relative h-5 flex-1 overflow-hidden rounded bg-white/[0.03]">
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded transition-all duration-500 ${
+                        isActive ? "bg-white/25" : "bg-white/10"
+                      }`}
+                      style={{ width: `${(count / maxCount) * 100}%` }}
+                    />
+                    <span className="relative z-10 flex h-full items-center px-2 text-[11px] tabular-nums text-muted-foreground">
+                      {count}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+            {aggData.length === 0 && (
+              <p className="text-sm text-muted-foreground">No data available.</p>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Launches */}
+      <div>
         <div className="space-y-2">
           {displayedLaunches.map((l) => {
             const notable = getNotable(l.name);

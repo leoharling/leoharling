@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, CalendarClock, History, Rocket as RocketIcon, X, Globe2 } from "lucide-react";
-import dynamic from "next/dynamic";
-
-const SpaceportGlobe = dynamic(
-  () => import("@/components/space/SpaceportGlobe"),
-  { ssr: false }
-);
+import { Loader2, CalendarClock, History, Rocket as RocketIcon, X } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import SectionHeading from "@/components/ui/SectionHeading";
 import LaunchCard from "@/components/tools/LaunchCard";
@@ -35,10 +29,9 @@ interface Launch {
 }
 
 
-type Tab = "globe" | "upcoming" | "past" | "rockets";
+type Tab = "upcoming" | "past" | "rockets";
 
 const TABS: { key: Tab; label: string; icon: typeof CalendarClock }[] = [
-  { key: "globe", label: "Globe", icon: Globe2 },
   { key: "upcoming", label: "Upcoming", icon: CalendarClock },
   { key: "past", label: "Past Launches", icon: History },
   { key: "rockets", label: "Rockets", icon: RocketIcon },
@@ -146,11 +139,6 @@ export default function LaunchTrackerPage() {
           );
         })}
       </div>
-
-      {/* Globe tab */}
-      {tab === "globe" && (
-        <SpaceportGlobe launches={launches} />
-      )}
 
       {/* Upcoming tab */}
       {tab === "upcoming" && (

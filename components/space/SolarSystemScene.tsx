@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useMemo, useState, useCallback } from "react";
+import { useRef, useMemo, useState, useCallback, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -17,154 +17,65 @@ function orbitRadius(au: number): number {
 }
 
 function planetSize(radiusKm: number): number {
-  // Bigger planets so they're clearly visible
   return 0.12 + Math.sqrt(radiusKm / 70000) * 0.35;
 }
 
 function orbitalSpeed(periodYears: number): number {
-  return (2 * Math.PI) / (25 + Math.log(periodYears + 1) * 40);
+  return (2 * Math.PI) / (250 + Math.log(periodYears + 1) * 400);
 }
 
-// ── Fast procedural textures using ImageData ─────────────────
-function noise(x: number, y: number, seed: number): number {
-  const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 43.12) * 43758.5453;
-  return n - Math.floor(n);
-}
+// ── Real texture paths ──────────────────────────────────────
+const PLANET_TEXTURE_PATHS: Record<string, string> = {
+  Mercury: "/textures/mercury-2k.jpg",
+  Venus: "/textures/venus-2k.jpg",
+  Earth: "/textures/earth-blue-marble-1k.jpg",
+  Mars: "/textures/mars-2k.jpg",
+  Jupiter: "/textures/jupiter-2k.jpg",
+  Saturn: "/textures/saturn-2k.jpg",
+  Uranus: "/textures/uranus-2k.jpg",
+  Neptune: "/textures/neptune-2k.jpg",
+};
 
-function fbm(x: number, y: number, seed: number, octaves = 4): number {
-  let val = 0, amp = 0.5, freq = 1;
-  for (let i = 0; i < octaves; i++) {
-    val += amp * noise(x * freq, y * freq, seed + i * 7.3);
-    amp *= 0.5;
-    freq *= 2.0;
-  }
-  return val;
-}
+// Shared texture cache — loaded once, reused across re-renders
+const textureCache = new Map<string, THREE.Texture>();
+const loader = new THREE.TextureLoader();
 
-function makeTexture(w: number, h: number, fill: (x: number, y: number, w: number, h: number) => [number, number, number, number]): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d")!;
-  const imageData = ctx.createImageData(w, h);
-  const data = imageData.data;
+function useRealTexture(path: string): THREE.Texture | null {
+  const [texture, setTexture] = useState<THREE.Texture | null>(
+    () => textureCache.get(path) ?? null
+  );
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const [r, g, b, a] = fill(x, y, w, h);
-      const idx = (y * w + x) * 4;
-      data[idx] = r;
-      data[idx + 1] = g;
-      data[idx + 2] = b;
-      data[idx + 3] = a;
+  useEffect(() => {
+    if (textureCache.has(path)) {
+      setTexture(textureCache.get(path)!);
+      return;
     }
-  }
+    loader.load(path, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      textureCache.set(path, tex);
+      setTexture(tex);
+    });
+  }, [path]);
 
-  ctx.putImageData(imageData, 0, 0);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function createSunTexture(): THREE.CanvasTexture {
-  return makeTexture(256, 256, (x, y) => {
-    const n = fbm(x / 40, y / 40, 0, 4);
-    return [255, Math.min(255, 170 + n * 70), Math.min(255, 40 + n * 50), 255];
-  });
-}
-
-function createPlanetTexture(planet: Planet): THREE.CanvasTexture {
-  const w = 512, h = 256;
-  const name = planet.name;
-
-  return makeTexture(w, h, (x, y) => {
-    if (name === "Mercury") {
-      const n = fbm(x / 60, y / 60, 1, 4);
-      const crater = fbm(x / 20, y / 20, 2, 3);
-      const base = 120 + n * 40 - (crater > 0.6 ? 30 : 0);
-      return [base, base - 8, base - 15, 255];
-    }
-    if (name === "Venus") {
-      const n = fbm(x / 80, y / 40, 10, 4);
-      return [200 + n * 35, 170 + n * 25, 100 + n * 25, 255];
-    }
-    if (name === "Earth") {
-      const n = fbm(x / 60, y / 60, 20, 5);
-      const lat = y / h;
-      const isPolar = lat < 0.08 || lat > 0.92;
-      if (isPolar) return [220, 230, 240, 255];
-      if (n > 0.5) {
-        const g = 80 + (n - 0.5) * 300;
-        return [50 + (n - 0.5) * 200, Math.min(255, g), 30, 255];
-      }
-      return [25, 60 + n * 30, 120 + n * 40, 255];
-    }
-    if (name === "Mars") {
-      const n = fbm(x / 70, y / 70, 30, 4);
-      const n2 = fbm(x / 35, y / 35, 35, 3);
-      const lat = y / h;
-      if (lat < 0.06 || lat > 0.94) return [210, 200, 190, 255];
-      return [165 + n * 45 - n2 * 25, 85 + n * 25 - n2 * 15, 45 + n * 15, 255];
-    }
-    if (name === "Jupiter") {
-      const band = Math.sin(y / h * Math.PI * 14) * 0.5 + Math.sin(y / h * Math.PI * 7 + 1) * 0.3;
-      const turb = fbm(x / 100, y / 20, 40, 3) * 0.25;
-      const v = band + turb;
-      // Great Red Spot
-      const dx = x / w - 0.35, dy = y / h - 0.55;
-      const spot = (dx * dx) / 0.003 + (dy * dy) / 0.001;
-      const spotMix = spot < 1 ? (1 - spot) * 0.5 : 0;
-      return [
-        Math.min(255, 190 + v * 35 + spotMix * 80),
-        Math.min(255, 150 + v * 30 - spotMix * 30),
-        Math.min(255, 100 + v * 20 - spotMix * 20),
-        255,
-      ];
-    }
-    if (name === "Saturn") {
-      const band = Math.sin(y / h * Math.PI * 10) * 0.25;
-      const t = fbm(x / 140, y / 30, 50, 3) * 0.12;
-      const v = band + t;
-      return [Math.min(255, 215 + v * 25), Math.min(255, 195 + v * 20), Math.min(255, 140 + v * 15), 255];
-    }
-    if (name === "Uranus") {
-      const n = fbm(x / 140, y / 140, 60, 3) * 0.06;
-      return [160 + n * 30, 210 + n * 20, 220 + n * 15, 255];
-    }
-    // Neptune
-    const band = Math.sin(y / h * Math.PI * 8) * 0.12;
-    const n = fbm(x / 100, y / 40, 70, 3) * 0.08;
-    const v = band + n;
-    return [65 + v * 15, 85 + v * 20, Math.min(255, 190 + v * 25), 255];
-  });
-}
-
-function createRingTexture(): THREE.CanvasTexture {
-  return makeTexture(256, 1, (x) => {
-    const t = x / 256;
-    const inGap = t > 0.45 && t < 0.52;
-    const density = inGap ? 0.05 : 0.35 + Math.sin(t * 30) * 0.1 + noise(t * 10, 0, 99) * 0.12;
-    const alpha = Math.min(255, density * 255);
-    return [215, 200, 165, alpha];
-  });
+  return texture;
 }
 
 // ── Sun ──────────────────────────────────────────────────────
 function Sun() {
   const meshRef = useRef<THREE.Mesh>(null);
-  const texture = useMemo(() => createSunTexture(), []);
+  const texture = useRealTexture("/textures/sun-2k.jpg");
 
   useFrame((_, delta) => {
-    if (meshRef.current) meshRef.current.rotation.y += delta * 0.05;
+    if (meshRef.current) meshRef.current.rotation.y += delta * 0.03;
   });
 
   return (
     <group>
       <mesh ref={meshRef}>
         <sphereGeometry args={[0.55, 48, 48]} />
-        <meshBasicMaterial map={texture} />
+        <meshBasicMaterial map={texture} color={texture ? undefined : "#ffaa22"} />
       </mesh>
-      {/* Bright glow layers */}
+      {/* Glow layers */}
       <mesh>
         <sphereGeometry args={[0.7, 32, 32]} />
         <meshBasicMaterial color="#ffcc44" transparent opacity={0.12} side={THREE.BackSide} />
@@ -173,7 +84,7 @@ function Sun() {
         <sphereGeometry args={[1.0, 32, 32]} />
         <meshBasicMaterial color="#ff9922" transparent opacity={0.04} side={THREE.BackSide} />
       </mesh>
-      <pointLight color="#fff5e0" intensity={4} distance={50} />
+      <pointLight color="#fff5e0" intensity={4} distance={60} />
     </group>
   );
 }
@@ -202,30 +113,36 @@ function OrbitPath({ radius }: { radius: number }) {
 function PlanetBody({
   planet,
   onSelect,
+  frozen,
+  earthAngleRef,
 }: {
   planet: Planet;
   onSelect: (planet: Planet) => void;
+  frozen: boolean;
+  earthAngleRef?: React.MutableRefObject<number>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
-  const texture = useMemo(() => createPlanetTexture(planet), [planet]);
-  const ringTexture = useMemo(
-    () => (planet.hasRings ? createRingTexture() : null),
-    [planet.hasRings]
-  );
+
+  const texturePath = PLANET_TEXTURE_PATHS[planet.name];
+  const texture = useRealTexture(texturePath);
+  const ringTexture = useRealTexture("/textures/saturn-ring.png");
 
   const r = orbitRadius(planet.distanceAU);
   const size = planetSize(planet.radiusKm);
   const speed = orbitalSpeed(planet.orbitalPeriodYears);
-  const startAngle = useRef(Math.random() * Math.PI * 2);
+  const angleRef = useRef(Math.random() * Math.PI * 2);
 
-  useFrame(({ clock }) => {
+  useFrame((_, delta) => {
     if (!groupRef.current || !meshRef.current) return;
-    const angle = startAngle.current + clock.getElapsedTime() * speed;
-    groupRef.current.position.x = Math.cos(angle) * r;
-    groupRef.current.position.z = Math.sin(angle) * r;
-    meshRef.current.rotation.y += 0.003;
+    if (!frozen) {
+      angleRef.current += delta * speed;
+      meshRef.current.rotation.y += 0.003;
+    }
+    groupRef.current.position.x = Math.cos(angleRef.current) * r;
+    groupRef.current.position.z = Math.sin(angleRef.current) * r;
+    if (earthAngleRef) earthAngleRef.current = angleRef.current;
   });
 
   const tilt = planet.name === "Uranus" ? Math.PI * 0.48 : 0.05;
@@ -253,15 +170,16 @@ function PlanetBody({
           <sphereGeometry args={[size, 48, 48]} />
           <meshStandardMaterial
             map={texture}
-            roughness={0.7}
+            color={texture ? undefined : planet.color}
+            roughness={0.8}
             metalness={0.05}
             emissive={planet.color}
-            emissiveIntensity={0.08}
+            emissiveIntensity={0.05}
           />
         </mesh>
 
-        {/* Rings */}
-        {ringTexture && (
+        {/* Saturn rings */}
+        {planet.hasRings && (
           <mesh rotation={[Math.PI / 2 + tilt, 0, 0]}>
             <ringGeometry args={[size * 1.3, size * 2.2, 64]} />
             <meshBasicMaterial
@@ -269,13 +187,13 @@ function PlanetBody({
               transparent
               opacity={0.75}
               side={THREE.DoubleSide}
+              color={ringTexture ? undefined : "#d4c8a0"}
             />
           </mesh>
         )}
 
-        {/* Always-visible planet name */}
         <Html
-          distanceFactor={14}
+          distanceFactor={18}
           style={{ pointerEvents: "none" }}
           position={[0, size + 0.12, 0]}
         >
@@ -290,7 +208,6 @@ function PlanetBody({
           </div>
         </Html>
 
-        {/* Selection ring on hover */}
         {hovered && (
           <mesh rotation={[Math.PI / 2, 0, 0]}>
             <ringGeometry args={[size + 0.03, size + 0.06, 32]} />
@@ -312,25 +229,25 @@ function ProbeMarker({
   probe,
   isSelected,
   onSelect,
+  angleOffset,
 }: {
   probe: DeepSpaceProbe;
   isSelected: boolean;
   onSelect: (probe: DeepSpaceProbe) => void;
+  angleOffset: number;
 }) {
   const [hovered, setHovered] = useState(false);
   const isNearby = probe.distanceAU <= EDGE_INDICATOR_THRESHOLD_AU;
 
-  // Position: use orbitRadius for nearby, clamp at edge for far probes
   const r = isNearby
     ? orbitRadius(probe.distanceAU)
-    : orbitRadius(30) + 1.5; // just beyond Neptune orbit
-  const angle = (probe.eclipticLonDeg * Math.PI) / 180;
+    : orbitRadius(30) + 1.5;
+  const angle = (probe.eclipticLonDeg * Math.PI) / 180 + angleOffset;
   const x = Math.cos(angle) * r;
   const z = Math.sin(angle) * r;
 
   return (
     <group position={[x, 0, z]}>
-      {/* Diamond-shaped marker (rotated cube) */}
       <mesh
         rotation={[Math.PI / 4, 0, Math.PI / 4]}
         onClick={(e) => {
@@ -358,7 +275,6 @@ function ProbeMarker({
         />
       </mesh>
 
-      {/* Glow effect when selected */}
       {isSelected && (
         <mesh rotation={[Math.PI / 4, 0, Math.PI / 4]}>
           <boxGeometry args={[0.3, 0.3, 0.3]} />
@@ -366,9 +282,8 @@ function ProbeMarker({
         </mesh>
       )}
 
-      {/* Label */}
       <Html
-        distanceFactor={14}
+        distanceFactor={18}
         style={{ pointerEvents: "none" }}
         position={[0, 0.25, 0]}
       >
@@ -391,14 +306,20 @@ function ProbeMarker({
   );
 }
 
-// ── Probe trajectory path ────────────────────────────────────
-function ProbeTrajectory({ probe }: { probe: DeepSpaceProbe }) {
+// ── Probe trajectory path (static historical path, rotated to Earth) ──
+function ProbeTrajectory({
+  probe,
+  rotationOffset,
+}: {
+  probe: DeepSpaceProbe;
+  rotationOffset: number;
+}) {
   const line = useMemo(() => {
     const points = probe.trajectory
       .filter((wp) => wp.distanceAU <= EDGE_INDICATOR_THRESHOLD_AU)
       .map((wp) => {
         const r = orbitRadius(wp.distanceAU);
-        const angle = (wp.eclipticLonDeg * Math.PI) / 180;
+        const angle = (wp.eclipticLonDeg * Math.PI) / 180 + rotationOffset;
         return new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r);
       });
 
@@ -416,19 +337,18 @@ function ProbeTrajectory({ probe }: { probe: DeepSpaceProbe }) {
     const l = new THREE.Line(geo, mat);
     l.computeLineDistances();
     return l;
-  }, [probe]);
+  }, [probe, rotationOffset]);
 
   if (!line) return null;
 
   return (
     <>
       <primitive object={line} />
-      {/* Waypoint markers */}
       {probe.trajectory
         .filter((wp) => wp.distanceAU <= EDGE_INDICATOR_THRESHOLD_AU)
         .map((wp, i) => {
           const r = orbitRadius(wp.distanceAU);
-          const angle = (wp.eclipticLonDeg * Math.PI) / 180;
+          const angle = (wp.eclipticLonDeg * Math.PI) / 180 + rotationOffset;
           return (
             <mesh
               key={i}
@@ -451,6 +371,60 @@ function ProbeTrajectory({ probe }: { probe: DeepSpaceProbe }) {
   );
 }
 
+// ── Camera zoom controller (only animates during transitions) ────────
+function CameraZoom({
+  controlsRef,
+  target,
+  active,
+}: {
+  controlsRef: React.RefObject<any>;
+  target: THREE.Vector3 | null;
+  active: boolean;
+}) {
+  const origin = useMemo(() => new THREE.Vector3(0, 0, 0), []);
+  const animating = useRef(false);
+  const prevActive = useRef(false);
+  const prevTarget = useRef<THREE.Vector3 | null>(null);
+
+  useFrame(({ camera }) => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    // Detect selection change → start animating
+    if (active !== prevActive.current || target !== prevTarget.current) {
+      prevActive.current = active;
+      prevTarget.current = target;
+      animating.current = true;
+    }
+
+    // Only move camera during transitions, then let user freely zoom/orbit
+    if (!animating.current) return;
+
+    const dest = active && target ? target : origin;
+    const desiredDist = active ? 12 : 32;
+
+    controls.target.lerp(dest, 0.04);
+
+    const offset = camera.position.clone().sub(controls.target);
+    const currentDist = offset.length();
+    if (Math.abs(currentDist - desiredDist) > 0.3) {
+      const newDist = currentDist + (desiredDist - currentDist) * 0.04;
+      offset.normalize().multiplyScalar(newDist);
+      camera.position.copy(controls.target).add(offset);
+    }
+
+    controls.update();
+
+    // Stop animating once camera has settled
+    const targetDiff = controls.target.distanceTo(dest);
+    if (Math.abs(currentDist - desiredDist) < 0.5 && targetDiff < 0.3) {
+      animating.current = false;
+    }
+  });
+
+  return null;
+}
+
 // ── Scene ────────────────────────────────────────────────────
 function Scene({
   onSelectPlanet,
@@ -461,51 +435,80 @@ function Scene({
   onSelectProbe: (probe: DeepSpaceProbe | null) => void;
   selectedProbeName: string | null;
 }) {
+  const controlsRef = useRef<any>(null);
+  const earthAngleRef = useRef(0);
+
   const handleMiss = useCallback(() => {
-    onSelectProbe(null); // Clear probe selection on background click
+    onSelectProbe(null);
   }, [onSelectProbe]);
 
   const selectedProbe = selectedProbeName
     ? DEEP_SPACE_PROBES.find((p) => p.name === selectedProbeName) ?? null
     : null;
 
+  const frozen = !!selectedProbeName;
+
+  const rotationOffset = useMemo(() => {
+    if (!frozen) return 0;
+    return earthAngleRef.current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProbeName]);
+
+  const probeTarget = useMemo(() => {
+    if (!selectedProbe) return null;
+    const isNearby = selectedProbe.distanceAU <= EDGE_INDICATOR_THRESHOLD_AU;
+    const r = isNearby
+      ? orbitRadius(selectedProbe.distanceAU)
+      : orbitRadius(30) + 1.5;
+    const angle = (selectedProbe.eclipticLonDeg * Math.PI) / 180 + rotationOffset;
+    return new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+  }, [selectedProbe, rotationOffset]);
+
   return (
     <>
-      {/* Higher ambient so planets aren't pitch black on the dark side */}
       <ambientLight intensity={0.5} />
-      {/* Hemisphere light adds subtle color variation */}
       <hemisphereLight args={["#b1c5ff", "#2a1a00", 0.3]} />
 
       <mesh onClick={handleMiss}>
-        <sphereGeometry args={[50, 8, 8]} />
+        <sphereGeometry args={[60, 8, 8]} />
         <meshBasicMaterial visible={false} side={THREE.BackSide} />
       </mesh>
 
       <Sun />
 
       {PLANETS.map((p) => (
-        <PlanetBody key={p.name} planet={p} onSelect={onSelectPlanet} />
+        <PlanetBody
+          key={p.name}
+          planet={p}
+          onSelect={onSelectPlanet}
+          frozen={frozen}
+          earthAngleRef={p.name === "Earth" ? earthAngleRef : undefined}
+        />
       ))}
 
-      {/* Deep space probes */}
       {DEEP_SPACE_PROBES.map((probe) => (
         <ProbeMarker
           key={probe.name}
           probe={probe}
           isSelected={selectedProbeName === probe.name}
           onSelect={onSelectProbe}
+          angleOffset={frozen ? rotationOffset : 0}
         />
       ))}
 
-      {/* Selected probe trajectory */}
-      {selectedProbe && <ProbeTrajectory probe={selectedProbe} />}
+      {selectedProbe && (
+        <ProbeTrajectory probe={selectedProbe} rotationOffset={rotationOffset} />
+      )}
+
+      <CameraZoom controlsRef={controlsRef} target={probeTarget} active={frozen} />
 
       <OrbitControls
+        ref={controlsRef}
         enablePan={false}
-        minDistance={3}
-        maxDistance={30}
-        autoRotate
-        autoRotateSpeed={0.15}
+        minDistance={5}
+        maxDistance={45}
+        autoRotate={!frozen}
+        autoRotateSpeed={0.12}
         maxPolarAngle={Math.PI * 0.85}
         minPolarAngle={Math.PI * 0.15}
       />
@@ -525,7 +528,7 @@ export default function SolarSystemScene({
 }) {
   return (
     <Canvas
-      camera={{ position: [0, 6, 16], fov: 50 }}
+      camera={{ position: [0, 12, 28], fov: 50 }}
       dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true }}
       style={{ background: "transparent" }}

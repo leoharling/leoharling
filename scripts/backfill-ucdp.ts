@@ -28,7 +28,7 @@ const supabase = createClient(
 // NOTE: Duplicated from lib/ucdp.ts — script runs standalone outside Next.js
 const CONFLICTS: Record<string, { codes: number[]; startDate: string }> = {
   ukraine: { codes: [369], startDate: "2022-02-24" },
-  middleeast: { codes: [666, 6661], startDate: "2023-10-07" },
+  middleeast: { codes: [666, 6661, 630, 660, 652, 679], startDate: "2023-10-07" },
   sudan: { codes: [625], startDate: "2023-04-15" },
   myanmar: { codes: [775], startDate: "2021-02-01" },
   drc: { codes: [490], startDate: "2021-11-01" },

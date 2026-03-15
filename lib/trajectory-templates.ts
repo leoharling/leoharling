@@ -3,9 +3,12 @@ export interface StagingEvent {
   progressFraction: number; // 0-1 along the trajectory arc
 }
 
+export type OrbitCategory = "circular" | "transfer" | "escape";
+
 export interface TrajectoryTemplate {
   orbitAbbrev: string;      // matches mission.orbit.abbrev
   orbitName: string;
+  category: OrbitCategory;  // determines visualization model
   altitudeKm: number;       // target orbit altitude (apogee for elliptical)
   perigeeKm?: number;
   inclinationDeg: number;
@@ -17,6 +20,7 @@ export const TRAJECTORY_TEMPLATES: TrajectoryTemplate[] = [
   {
     orbitAbbrev: "LEO",
     orbitName: "Low Earth Orbit",
+    category: "circular",
     altitudeKm: 400,
     inclinationDeg: 51.6,
     ascentProfile: [
@@ -36,6 +40,7 @@ export const TRAJECTORY_TEMPLATES: TrajectoryTemplate[] = [
   {
     orbitAbbrev: "GTO",
     orbitName: "Geostationary Transfer Orbit",
+    category: "transfer",
     altitudeKm: 35786,
     perigeeKm: 250,
     inclinationDeg: 28.5,
@@ -59,6 +64,7 @@ export const TRAJECTORY_TEMPLATES: TrajectoryTemplate[] = [
   {
     orbitAbbrev: "SSO",
     orbitName: "Sun-Synchronous Orbit",
+    category: "circular",
     altitudeKm: 700,
     inclinationDeg: 97.8,
     ascentProfile: [
@@ -78,6 +84,7 @@ export const TRAJECTORY_TEMPLATES: TrajectoryTemplate[] = [
   {
     orbitAbbrev: "MEO",
     orbitName: "Medium Earth Orbit",
+    category: "transfer",
     altitudeKm: 20200,
     inclinationDeg: 55,
     ascentProfile: [
@@ -96,6 +103,7 @@ export const TRAJECTORY_TEMPLATES: TrajectoryTemplate[] = [
   {
     orbitAbbrev: "HEO",
     orbitName: "Highly Elliptical Orbit",
+    category: "transfer",
     altitudeKm: 39750,
     perigeeKm: 500,
     inclinationDeg: 63.4,
@@ -112,14 +120,79 @@ export const TRAJECTORY_TEMPLATES: TrajectoryTemplate[] = [
       { label: "Apogee Burn", progressFraction: 0.85 },
     ],
   },
+  {
+    orbitAbbrev: "TLI",
+    orbitName: "Trans-Lunar Injection",
+    category: "escape",
+    altitudeKm: 384400,
+    inclinationDeg: 28.5,
+    ascentProfile: [
+      [0, 0], [0.05, 0.01], [0.15, 0.05], [0.3, 0.15],
+      [0.5, 0.3], [0.7, 0.5], [0.85, 0.7], [1, 1],
+    ],
+    stagingEvents: [
+      { label: "Liftoff", progressFraction: 0 },
+      { label: "Max-Q", progressFraction: 0.1 },
+      { label: "MECO", progressFraction: 0.2 },
+      { label: "Stage Sep", progressFraction: 0.22 },
+      { label: "SES-1", progressFraction: 0.25 },
+      { label: "Fairing Sep", progressFraction: 0.3 },
+      { label: "Parking orbit", progressFraction: 0.5 },
+      { label: "TLI burn", progressFraction: 0.75 },
+      { label: "Earth escape", progressFraction: 0.95 },
+    ],
+  },
+  {
+    orbitAbbrev: "ESC",
+    orbitName: "Earth Escape",
+    category: "escape",
+    altitudeKm: 1000000,
+    inclinationDeg: 28.5,
+    ascentProfile: [
+      [0, 0], [0.05, 0.01], [0.15, 0.05], [0.3, 0.15],
+      [0.5, 0.3], [0.7, 0.5], [0.85, 0.7], [1, 1],
+    ],
+    stagingEvents: [
+      { label: "Liftoff", progressFraction: 0 },
+      { label: "Max-Q", progressFraction: 0.1 },
+      { label: "MECO", progressFraction: 0.2 },
+      { label: "Stage Sep", progressFraction: 0.22 },
+      { label: "SES-1", progressFraction: 0.25 },
+      { label: "Parking orbit", progressFraction: 0.5 },
+      { label: "Injection burn", progressFraction: 0.75 },
+      { label: "Earth escape", progressFraction: 0.95 },
+    ],
+  },
 ];
 
-// Find template for a given orbit abbreviation, default to LEO
+// Map API orbit names/abbreviations to our templates
+const ORBIT_ALIAS: Record<string, string> = {
+  "leo": "LEO", "low earth orbit": "LEO",
+  "sso": "SSO", "sun-synchronous orbit": "SSO", "polar": "SSO",
+  "gto": "GTO", "geostationary transfer orbit": "GTO",
+  "geo": "GTO", "geostationary orbit": "GTO", "gso": "GTO",
+  "sub-gto": "GTO",
+  "meo": "MEO", "medium earth orbit": "MEO",
+  "heo": "HEO", "highly elliptical orbit": "HEO", "elliptical": "HEO",
+  "molniya": "HEO",
+  "tli": "TLI", "lunar": "TLI", "lunar flyby": "TLI",
+  "trans-lunar injection": "TLI", "cislunar": "TLI",
+  "esc": "ESC", "escape": "ESC", "heliocentric": "ESC",
+  "mars": "ESC", "interplanetary": "ESC", "l1": "ESC", "l2": "ESC",
+  "solar escape": "ESC",
+};
+
 export function getTrajectoryTemplate(orbitAbbrev?: string): TrajectoryTemplate {
   if (!orbitAbbrev) return TRAJECTORY_TEMPLATES[0];
+  const key = orbitAbbrev.toLowerCase().trim();
+  const mapped = ORBIT_ALIAS[key];
+  if (mapped) {
+    const found = TRAJECTORY_TEMPLATES.find((t) => t.orbitAbbrev === mapped);
+    if (found) return found;
+  }
   return (
     TRAJECTORY_TEMPLATES.find(
-      (t) => t.orbitAbbrev.toLowerCase() === orbitAbbrev.toLowerCase()
+      (t) => t.orbitAbbrev.toLowerCase() === key
     ) ?? TRAJECTORY_TEMPLATES[0]
   );
 }

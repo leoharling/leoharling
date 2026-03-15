@@ -21,8 +21,10 @@ export async function GET(req: NextRequest) {
   }
 
   // Fetch UCDP events from Supabase + other sources in parallel
-  // Order by best (fatalities) DESC to get the most significant events across all years
-  const [ucdpResult, unhcrStats, deepStateGeoJSON] = await Promise.all([
+  // Two queries: top events by fatalities (historical) + recent events (last 6 months)
+  const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const [topResult, recentResult, unhcrStats, deepStateGeoJSON] = await Promise.all([
     supabase
       .from("ucdp_events")
       .select("*")
@@ -31,12 +33,26 @@ export async function GET(req: NextRequest) {
       .neq("where_description", "")
       .gt("best", 0)
       .order("best", { ascending: false })
-      .limit(3000),
+      .limit(2000),
+    supabase
+      .from("ucdp_events")
+      .select("*")
+      .eq("conflict_id", conflictId)
+      .not("where_description", "is", null)
+      .neq("where_description", "")
+      .gte("date_end", sixMonthsAgo)
+      .order("best", { ascending: false })
+      .limit(1000),
     fetchUNHCRStats(conflictId),
     conflictId === "ukraine" ? fetchOrCacheDeepState() : Promise.resolve(null),
   ]);
 
-  const events = ucdpResult.data || [];
+  // Merge and deduplicate
+  const byId = new Map<number, DBEvent>();
+  for (const e of [...(topResult.data || []), ...(recentResult.data || [])]) {
+    byId.set(e.id, e);
+  }
+  const events = [...byId.values()];
 
   // Cluster events by region + month to create meaningful summaries
   const clusters = clusterEvents(events);

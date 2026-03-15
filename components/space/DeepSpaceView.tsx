@@ -25,6 +25,11 @@ const SolarSystemScene = dynamic(
   { ssr: false }
 );
 
+const PlanetPreview3D = dynamic(
+  () => import("@/components/space/PlanetPreview3D"),
+  { ssr: false }
+);
+
 type ViewMode = "solar-system" | "local-cluster" | "galactic";
 
 const VIEW_ORDER: ViewMode[] = ["solar-system", "local-cluster", "galactic"];
@@ -909,19 +914,17 @@ function PlanetDetailView({ planet, onClose }: { planet: Planet; onClose: () => 
         {/* Planet with orbiting moons — left side */}
         <motion.div
           className="relative shrink-0 flex items-center justify-center"
-          style={{ width: displaySize + 120, height: displaySize + 80 }}
+          style={{ width: displaySize + 200, height: displaySize + 200 }}
           initial={{ scale: 0.2, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
         >
-          <div className="relative flex items-center justify-center">
-            <PlanetSVG planet={planet} size={displaySize} detailed />
-            {planet.hasRings && <RingSVG planet={planet} size={displaySize * 0.75} />}
-          </div>
-          {/* Orbiting moons */}
-          {planet.namedMoons.length > 0 && (
-            <OrbitingMoons moons={planet.namedMoons} planetSize={displaySize} />
-          )}
+          <PlanetPreview3D
+            planetName={planet.name}
+            hasRings={!!planet.hasRings}
+            size={displaySize + 200}
+            moons={planet.namedMoons}
+          />
           <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-sm font-semibold text-foreground whitespace-nowrap">
             {planet.name}
           </span>

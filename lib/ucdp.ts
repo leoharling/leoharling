@@ -26,7 +26,7 @@ export const UCDP_CONFLICT_COUNTRIES: Record<string, {
     label: "Russia–Ukraine War",
   },
   middleeast: {
-    codes: [666, 6661],
+    codes: [666, 6661, 630, 660, 652, 679],  // Israel, Palestine, Iran, Lebanon, Syria, Yemen
     startDate: "2023-10-07",
     label: "Israel–Palestine & Regional",
   },
