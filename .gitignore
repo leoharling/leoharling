@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+#projects
+/public/projects
+
 # next.js
 /.next/
 /out/
@@ -23,6 +26,15 @@
 # misc
 .DS_Store
 *.pem
+
+# claude code local settings (contains permissions, not for sharing)
+.claude/settings.local.json
+
+# playwright mcp screenshots
+.playwright-mcp/
+
+# superpowers local tool files
+.superpowers/
 
 # debug
 npm-debug.log*
