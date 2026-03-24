@@ -19,7 +19,7 @@ export default function SpacePage() {
   const [view, setView] = useState<SpaceView>("map");
 
   return (
-    <div className="relative min-h-screen pt-16">
+    <div className="relative min-h-screen">
       {/* Top nav — choose between Space Map and Launch Tracker */}
       <div className="sticky top-16 z-20 border-b border-white/[0.04] bg-background/80 backdrop-blur-md">
         <div className="mx-auto max-w-6xl flex items-center gap-1 px-4 py-2">

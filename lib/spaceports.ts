@@ -17,7 +17,7 @@ export interface SpaceportLocation {
 export const SPACEPORT_LOCATIONS: SpaceportLocation[] = [
   {
     id: 12,
-    name: "Cape Canaveral, FL, USA",
+    name: "Cape Canaveral SFS, FL, USA",
     country: "United States of America",
     lat: 28.4889,
     lon: -80.5778,
@@ -169,7 +169,7 @@ export const SPACEPORT_LOCATIONS: SpaceportLocation[] = [
   },
   {
     id: 19,
-    name: "Rocket Lab Launch Complex, Mahia Peninsula, New Zealand",
+    name: "Rocket Lab Launch Complex 1, Mahia Peninsula, New Zealand",
     country: "New Zealand",
     lat: -39.2611,
     lon: 177.8647,
@@ -251,7 +251,7 @@ export const SPACEPORT_LOCATIONS: SpaceportLocation[] = [
   },
   {
     id: 29,
-    name: "SpaceX South Texas Launch Site, TX, USA",
+    name: "SpaceX Starbase, TX, USA",
     country: "United States of America",
     lat: 25.9969,
     lon: -97.1546,
@@ -378,6 +378,16 @@ export const SPACEPORT_LOCATIONS: SpaceportLocation[] = [
     lon: -0.7783,
     pads: [
       { id: 220, name: "SaxaVord Launch Pad",                  lat: 60.7625, lon: -0.7783 },
+    ],
+  },
+  {
+    id: 46,
+    name: "Andøya Spaceport",
+    country: "Norway",
+    lat: 69.2978,
+    lon: 16.0208,
+    pads: [
+      { id: 240, name: "Andøya Orbital Launch Pad",               lat: 69.2978, lon: 16.0208 },
     ],
   },
   {

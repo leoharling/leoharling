@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, CalendarClock, History, Rocket as RocketIcon, X } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
-import SectionHeading from "@/components/ui/SectionHeading";
 import LaunchCard from "@/components/tools/LaunchCard";
 import LaunchModal from "@/components/tools/LaunchModal";
 import PastLaunchesTab from "@/components/tools/PastLaunchesTab";
@@ -112,15 +111,9 @@ export default function LaunchTrackerPage() {
   });
 
   return (
-    <div className="mx-auto max-w-6xl px-6 pt-8 pb-16">
-      <SectionHeading
-        title="Space Launch Tracker"
-        subtitle="Track rocket launches worldwide with real-time countdowns, launch history, and detailed rocket specifications."
-        className="mb-6"
-      />
-
+    <div className="mx-auto max-w-6xl px-6 pt-3 pb-12">
       {/* Tab bar */}
-      <div className="mb-6 flex gap-1 rounded-xl bg-white/[0.03] p-1">
+      <div className="mb-4 flex gap-1 rounded-xl bg-white/[0.03] p-1">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
@@ -144,12 +137,12 @@ export default function LaunchTrackerPage() {
       {tab === "upcoming" && (
         <>
           {/* Provider filter */}
-          <div className="mb-8 flex flex-wrap gap-2">
+          <div className="mb-4 flex flex-wrap gap-1.5">
             {providers.map((p) => (
               <button
                 key={p.label}
                 onClick={() => setFilter(p.label)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                   filter === p.label
                     ? "bg-accent text-white"
                     : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"

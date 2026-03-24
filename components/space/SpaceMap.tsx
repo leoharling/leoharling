@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { SCALE_BANDS } from "@/lib/space-zoom";
 
 // ── Band scenes (dynamic, no SSR) ───────────────────────
@@ -298,6 +298,22 @@ export default function SpaceMap() {
                 <GalacticBand onNavigate={() => handleSetBand(3)} />
               )}
             </motion.div>
+
+            {/* Band description — centered so it never overlaps left legend or right controls */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={band}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none max-w-sm text-center"
+              >
+                <p className="text-[11px] text-white/45 leading-relaxed">
+                  {SCALE_BANDS[band].description}
+                </p>
+              </motion.div>
+            </AnimatePresence>
 
             {/* Scale indicator */}
             <div className="absolute bottom-3 right-3 z-20 pointer-events-none">

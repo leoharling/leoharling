@@ -155,6 +155,8 @@ async function fetchUCDP(url: string): Promise<UCDPApiResponse> {
   });
 
   if (!res.ok) {
+    // 404 = version doesn't exist yet (expected for future monthly releases)
+    if (res.status === 404) throw new Error(`UCDP_VERSION_NOT_FOUND: ${res.status}`);
     throw new Error(`UCDP API error: ${res.status} ${res.statusText}`);
   }
 
@@ -202,16 +204,23 @@ export async function fetchRecentEvents(
   const config = UCDP_CONFLICT_COUNTRIES[conflictId];
   if (!config) return [];
 
-  // Fetch quarterly (2025) + all monthly releases (2026) in parallel; skip missing versions gracefully
+  // Fetch quarterly (2025) + all monthly releases (2026) in parallel
+  // Only swallow "version not found" errors — auth failures bubble up
+  const silentIfMissing = (p: Promise<UCDPRawEvent[]>) =>
+    p.catch((e: Error) => {
+      if (String(e).includes("UCDP_VERSION_NOT_FOUND")) return [] as UCDPRawEvent[];
+      throw e;
+    });
+
   const results = await Promise.all([
-    fetchAllPages("gedevents", GED_CANDIDATE_VERSION, {
+    silentIfMissing(fetchAllPages("gedevents", GED_CANDIDATE_VERSION, {
       Country: config.codes.join(","),
       StartDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-    }).catch(() => [] as UCDPRawEvent[]),
+    })),
     ...GED_MONTHLY_VERSIONS.map((v) =>
-      fetchAllPages("gedevents", v, {
+      silentIfMissing(fetchAllPages("gedevents", v, {
         Country: config.codes.join(","),
-      }).catch(() => [] as UCDPRawEvent[]),
+      })),
     ),
   ]);
 

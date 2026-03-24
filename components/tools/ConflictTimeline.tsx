@@ -14,6 +14,15 @@ const CATEGORY_ICONS: Record<string, typeof Crosshair> = {
   diplomatic: Handshake,
 };
 
+// Layout constants (px)
+const TRACK_Y = 34;   // axis line y-position
+const TOTAL_H = 62;   // total timeline container height
+const DOT_MAJOR = 20; // major milestone dot diameter
+const DOT_MINOR = 14; // minor milestone dot diameter
+const SLIDER_R = 7;   // slider circle radius (circle = 14px)
+const NEAR_PCT = 3;   // near-milestone threshold during drag (%)
+const SNAP_PCT = 1.5; // near-milestone threshold at rest (%)
+
 function toTimestamp(d: string) { return new Date(d).getTime(); }
 
 export default function ConflictTimeline({
@@ -29,10 +38,10 @@ export default function ConflictTimeline({
   selectedTime?: number | null;
   onTimeChange?: (time: number | null) => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const [selected, setSelected] = useState<TimelineMilestone | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [nearMilestone, setNearMilestone] = useState<TimelineMilestone | null>(null);
   const isDragging = useRef(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -57,41 +66,48 @@ export default function ConflictTimeline({
     return range.start + (p / 100) * range.span;
   }, [range]);
 
-  // Slider position as percentage
   const sliderPct = useMemo(() => {
     if (selectedTime == null) return 100;
     return pctFromTimestamp(selectedTime);
   }, [selectedTime, pctFromTimestamp]);
 
-  // Formatted date for slider label
-  const sliderDateLabel = useMemo(() => {
+  // Milestone that's currently "active" — during drag: nearest within NEAR_PCT; at rest: nearest within SNAP_PCT
+  const activeMilestone = useMemo(() => {
+    if (dragging) return nearMilestone;
     if (selectedTime == null) return null;
-    return new Date(selectedTime).toLocaleDateString("en-US", { month: "short", year: "numeric" });
-  }, [selectedTime]);
+    const sp = pctFromTimestamp(selectedTime);
+    let best: TimelineMilestone | null = null;
+    let bestDist = SNAP_PCT;
+    for (const m of milestones) {
+      const dist = Math.abs(pct(m.date) - sp);
+      if (dist < bestDist) { bestDist = dist; best = m; }
+    }
+    return best;
+  }, [dragging, nearMilestone, selectedTime, pctFromTimestamp, milestones, pct]);
 
-  // Convert pointer X to timeline percentage
   const pointerToPercent = useCallback((clientX: number) => {
     const el = timelineRef.current;
     if (!el) return 100;
     const rect = el.getBoundingClientRect();
-    const x = clientX - rect.left;
-    return Math.max(0, Math.min(100, (x / rect.width) * 100));
+    return Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
   }, []);
 
-  // Handle drag events
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!isDragging.current || !onTimeChange) return;
     const p = pointerToPercent(e.clientX);
-    // Snap to "now" when within 3% of right edge
     if (p >= 97) {
       onTimeChange(null);
     } else {
       onTimeChange(timestampFromPct(p));
     }
-  }, [onTimeChange, pointerToPercent, timestampFromPct]);
+    const near = milestones.find((m) => Math.abs(pct(m.date) - p) < NEAR_PCT) ?? null;
+    setNearMilestone(near);
+  }, [onTimeChange, pointerToPercent, timestampFromPct, milestones, pct]);
 
   const handlePointerUp = useCallback(() => {
     isDragging.current = false;
+    setDragging(false);
+    setNearMilestone(null);
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
     window.removeEventListener("pointermove", handlePointerMove);
@@ -103,16 +119,15 @@ export default function ConflictTimeline({
     e.preventDefault();
     e.stopPropagation();
     isDragging.current = true;
+    setDragging(true);
     document.body.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
   }, [onTimeChange, handlePointerMove, handlePointerUp]);
 
-  // Click on timeline bar to jump to that time
   const handleTimelineClick = useCallback((e: React.MouseEvent) => {
     if (!onTimeChange) return;
-    // Don't handle if clicking on a milestone button
     if ((e.target as HTMLElement).closest("button")) return;
     const p = pointerToPercent(e.clientX);
     if (p >= 97) {
@@ -122,7 +137,6 @@ export default function ConflictTimeline({
     }
   }, [onTimeChange, pointerToPercent, timestampFromPct]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
@@ -130,12 +144,8 @@ export default function ConflictTimeline({
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  // Handle milestone click — also move slider
   const handleMilestoneClick = useCallback((m: TimelineMilestone) => {
-    setSelected((prev) => (prev === m ? null : m));
-    if (onTimeChange) {
-      onTimeChange(toTimestamp(m.date));
-    }
+    if (onTimeChange) onTimeChange(toTimestamp(m.date));
   }, [onTimeChange]);
 
   if (!mounted) return <div style={{ minHeight: 80 }} />;
@@ -144,192 +154,210 @@ export default function ConflictTimeline({
 
   return (
     <div>
-      {/* Scrollable timeline */}
-      <div ref={scrollRef} className="relative overflow-x-auto pb-2" style={{ minHeight: 80 }}>
+      {/* Timeline */}
+      <div
+        ref={timelineRef}
+        className="relative cursor-pointer select-none"
+        style={{ height: TOTAL_H, touchAction: "none" }}
+        onClick={handleTimelineClick}
+      >
+        {/* Phase bands */}
+        {phases.map((p) => {
+          const left = pct(p.startDate);
+          const right = p.endDate ? pct(p.endDate) : 100;
+          return (
+            <div
+              key={p.id}
+              className="absolute rounded-sm"
+              style={{
+                left: `${left}%`,
+                width: `${Math.max(right - left, 1)}%`,
+                top: 0,
+                height: 18,
+                backgroundColor: ESCALATION_COLORS[p.escalationLevel],
+                opacity: 0.10,
+              }}
+              title={p.label}
+            />
+          );
+        })}
+
+        {/* Phase labels */}
+        {phases.map((p) => {
+          const left = pct(p.startDate);
+          const right = p.endDate ? pct(p.endDate) : 100;
+          const mid = left + (right - left) / 2;
+          return (
+            <span
+              key={`label-${p.id}`}
+              className="absolute text-[8px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap pointer-events-none"
+              style={{ left: `${mid}%`, top: 3, transform: "translateX(-50%)" }}
+            >
+              {p.label}
+            </span>
+          );
+        })}
+
+        {/* Track background */}
         <div
-          ref={timelineRef}
-          className="relative cursor-pointer"
-          style={{ minWidth: 600, height: 64, touchAction: "none" }}
-          onClick={handleTimelineClick}
-        >
-          {/* Phase bands */}
-          {phases.map((p) => {
-            const left = pct(p.startDate);
-            const right = p.endDate ? pct(p.endDate) : 100;
-            const width = right - left;
-            return (
-              <div
-                key={p.id}
-                className="absolute top-0 h-6 rounded-sm"
-                style={{
-                  left: `${left}%`,
-                  width: `${Math.max(width, 1)}%`,
-                  backgroundColor: ESCALATION_COLORS[p.escalationLevel],
-                  opacity: 0.12,
-                }}
-                title={p.label}
-              />
-            );
-          })}
+          className="absolute left-0 right-0 bg-white/[0.07] rounded-full"
+          style={{ top: TRACK_Y, height: 2 }}
+        />
 
-          {/* Phase labels */}
-          {phases.map((p) => {
-            const left = pct(p.startDate);
-            const right = p.endDate ? pct(p.endDate) : 100;
-            const mid = left + (right - left) / 2;
-            return (
-              <span
-                key={`label-${p.id}`}
-                className="absolute text-[9px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap pointer-events-none"
-                style={{ left: `${mid}%`, top: 2, transform: "translateX(-50%)" }}
-              >
-                {p.label}
-              </span>
-            );
-          })}
-
-          {/* Timeline axis */}
-          <div className="absolute top-[28px] left-0 right-0 h-px bg-white/10" />
-
-          {/* Milestone dots */}
-          {milestones.map((m, i) => {
-            const Icon = CATEGORY_ICONS[m.category] || Crosshair;
-            const isSelected = selected === m;
-            return (
-              <button
-                key={i}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleMilestoneClick(m);
-                }}
-                className={`absolute flex items-center justify-center rounded-full border transition-all ${
-                  isSelected
-                    ? "border-white/30 bg-white/20 scale-125 z-10"
-                    : "border-white/10 bg-white/5 hover:bg-white/10 hover:scale-110"
-                }`}
-                style={{
-                  left: `${pct(m.date)}%`,
-                  top: m.significance === "major" ? 18 : 22,
-                  width: m.significance === "major" ? 20 : 14,
-                  height: m.significance === "major" ? 20 : 14,
-                  transform: "translateX(-50%)",
-                }}
-                title={m.title}
-              >
-                <Icon size={m.significance === "major" ? 10 : 7} className="text-muted-foreground" />
-              </button>
-            );
-          })}
-
-          {/* Slider handle */}
+        {/* Progress fill */}
+        {!isAtNow && (
           <div
-            className="absolute z-20"
-            style={{
-              left: `${sliderPct}%`,
-              top: 0,
-              transform: "translateX(-50%)",
-              height: 64,
-            }}
-            onPointerDown={handlePointerDown}
-          >
-            {/* Vertical line */}
-            <div
-              className="absolute left-1/2 -translate-x-1/2 top-0"
-              style={{
-                width: 2,
-                height: 64,
-                background: isAtNow
-                  ? "rgba(255,255,255,0.15)"
-                  : "rgba(255,255,255,0.4)",
-              }}
-            />
-            {/* Grab handle circle */}
-            <div
-              className={`absolute left-1/2 -translate-x-1/2 top-[22px] rounded-full border transition-all ${
-                isAtNow
-                  ? "bg-white/20 border-white/20 animate-pulse"
-                  : "bg-white/80 border-white/40 shadow-md shadow-white/10"
-              }`}
-              style={{
-                width: 14,
-                height: 14,
-                cursor: "grab",
-              }}
-            />
-            {/* Date label (shown when not at "now") */}
-            {!isAtNow && sliderDateLabel && (
-              <div
-                className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[9px] font-medium text-white/80"
-                style={{ bottom: "calc(100% + 4px)" }}
-              >
-                {sliderDateLabel}
-              </div>
-            )}
-          </div>
+            className="absolute bg-accent/50 rounded-full"
+            style={{ top: TRACK_Y, left: 0, width: `${sliderPct}%`, height: 2 }}
+          />
+        )}
 
-          {/* "Now" label — always visible at right edge */}
-          {!isAtNow && (
-            <div
-              className="absolute right-0 top-[22px] flex flex-col items-center cursor-pointer"
+        {/* Year markers */}
+        {(() => {
+          const startYear = new Date(range.start).getFullYear();
+          const endYear = new Date(range.end).getFullYear();
+          const years: number[] = [];
+          for (let y = startYear; y <= endYear; y++) years.push(y);
+          return years.map((y) => (
+            <span
+              key={y}
+              className="absolute text-[9px] text-white/20 pointer-events-none"
+              style={{ left: `${pct(`${y}-01-01`)}%`, top: TRACK_Y + 12 }}
+            >
+              {y}
+            </span>
+          ));
+        })()}
+
+        {/* Milestone dots */}
+        {milestones.map((m, i) => {
+          const Icon = CATEGORY_ICONS[m.category] || Crosshair;
+          const isActive = activeMilestone === m;
+          const isDragActive = dragging && isActive;
+          const dotSize = m.significance === "major" ? DOT_MAJOR : DOT_MINOR;
+          const dotTop = TRACK_Y - dotSize / 2;
+          const scale = isDragActive ? 1.65 : isActive ? 1.3 : 1;
+
+          return (
+            <button
+              key={i}
               onClick={(e) => {
                 e.stopPropagation();
-                onTimeChange?.(null);
+                handleMilestoneClick(m);
               }}
+              className={`absolute flex items-center justify-center rounded-full border transition-all duration-100 ${
+                isDragActive
+                  ? "border-white/60 bg-white/30 z-20"
+                  : isActive
+                  ? "border-white/25 bg-white/12 z-10"
+                  : "border-white/10 bg-white/5 hover:bg-white/10 hover:scale-110"
+              }`}
+              style={{
+                left: `${pct(m.date)}%`,
+                top: dotTop,
+                width: dotSize,
+                height: dotSize,
+                transform: `translateX(-50%) scale(${scale})`,
+              }}
+              title={m.title}
             >
-              <span className="h-3 w-3 rounded-full bg-white/10" />
-              <span className="mt-1 text-[8px] text-muted-foreground hover:text-white/60 transition-colors">Now</span>
-            </div>
-          )}
+              <Icon
+                size={m.significance === "major" ? 10 : 7}
+                className={isActive ? "text-white/85" : "text-muted-foreground"}
+              />
+            </button>
+          );
+        })}
 
-          {/* Year markers */}
-          {(() => {
-            const startYear = new Date(range.start).getFullYear();
-            const endYear = new Date(range.end).getFullYear();
-            const years = [];
-            for (let y = startYear; y <= endYear; y++) {
-              years.push(y);
-            }
-            return years.map((y) => (
-              <span
-                key={y}
-                className="absolute text-[9px] text-white/20 pointer-events-none"
-                style={{ left: `${pct(`${y}-01-01`)}%`, top: 46 }}
-              >
-                {y}
-              </span>
-            ));
-          })()}
+        {/* Slider */}
+        <div
+          className="absolute z-20"
+          style={{ left: `${sliderPct}%`, top: 0, transform: "translateX(-50%)", height: TOTAL_H }}
+          onPointerDown={handlePointerDown}
+        >
+          <div
+            className="absolute left-1/2 -translate-x-1/2"
+            style={{
+              top: 0,
+              width: 1.5,
+              height: TOTAL_H,
+              background: isAtNow ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.28)",
+            }}
+          />
+          <div
+            className={`absolute left-1/2 -translate-x-1/2 rounded-full border transition-all duration-100 ${
+              isAtNow
+                ? "bg-white/15 border-white/20 animate-pulse"
+                : dragging
+                ? "bg-white border-white/70 shadow-md shadow-white/20"
+                : "bg-white/80 border-white/50 shadow-sm"
+            }`}
+            style={{
+              top: TRACK_Y - SLIDER_R,
+              width: SLIDER_R * 2,
+              height: SLIDER_R * 2,
+              cursor: dragging ? "grabbing" : "grab",
+            }}
+          />
         </div>
+
+        {/* "Now" indicator */}
+        {!isAtNow && (
+          <button
+            className="absolute right-0 flex items-center gap-1 group"
+            style={{ top: TRACK_Y - 5 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTimeChange?.(null);
+            }}
+          >
+            <span className="h-2.5 w-2.5 rounded-full bg-white/15 group-hover:bg-white/35 transition-colors" />
+            <span className="text-[8px] text-muted-foreground group-hover:text-white/60 transition-colors leading-none">Now</span>
+          </button>
+        )}
       </div>
 
-      {/* "Return to Now" bar */}
+      {/* Unified info area */}
       {!isAtNow && (
-        <div className="flex items-center justify-center gap-2 mt-1">
-          <span className="text-[10px] text-muted-foreground">
-            Viewing: {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          </span>
-          <button
-            onClick={() => onTimeChange?.(null)}
-            className="text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
-          >
-            Return to Now
-          </button>
-        </div>
-      )}
-
-      {/* Selected milestone detail */}
-      {selected && (
-        <div className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-3">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] text-muted-foreground">
-              {new Date(selected.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-            </span>
-            <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-              {selected.category}
-            </span>
-          </div>
-          <p className="text-sm font-medium">{selected.title}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{selected.description}</p>
+        <div className="mt-2">
+          {activeMilestone ? (
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(activeMilestone.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                  <span className="text-white/15 text-[10px]">·</span>
+                  <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {activeMilestone.category}
+                  </span>
+                  <span className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[9px] text-muted-foreground/60">
+                    {activeMilestone.phase}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onTimeChange?.(null)}
+                  className="shrink-0 text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+                >
+                  Return to Now
+                </button>
+              </div>
+              <p className="mt-2 text-sm font-semibold">{activeMilestone.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{activeMilestone.description}</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 min-h-[18px]">
+              <span className="text-[10px] text-muted-foreground">
+                Viewing: {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+              <button
+                onClick={() => onTimeChange?.(null)}
+                className="text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+              >
+                Return to Now
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

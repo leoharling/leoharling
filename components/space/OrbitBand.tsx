@@ -146,7 +146,7 @@ export default function OrbitBand() {
       )}
 
       {/* Accordion legend */}
-      <div className="absolute bottom-4 left-4 flex flex-col gap-1 max-h-[75%] overflow-y-auto rounded-xl bg-black/60 backdrop-blur-md border border-white/5 p-2 min-w-[200px]">
+      <div className="absolute bottom-4 left-4 flex flex-col gap-1 max-h-[70%] overflow-y-auto rounded-xl bg-black/60 backdrop-blur-md border border-white/5 p-2 min-w-[200px]">
         {CATEGORIES.map((cat) => {
           const catGroups = data?.groups.filter((g) => g.category === cat.id) ?? [];
           const groupCount = catGroups.reduce((sum, g) => sum + g.tles.length, 0);
@@ -286,33 +286,27 @@ export default function OrbitBand() {
         )}
       </div>
 
-      {/* Time-lapse & instructions */}
-      <div className="absolute right-4 bottom-4 flex flex-col items-end gap-2">
-        <div className="flex items-center gap-1 rounded-lg bg-black/60 px-3 py-2 backdrop-blur-md border border-white/5">
-          <span className="text-xs text-muted-foreground mr-1.5">Time</span>
-          {[1, 10, 100, 500].map((speed) => (
-            <button
-              key={speed}
-              onClick={() => setTimeSpeed(speed)}
-              className={`px-2 py-0.5 text-xs font-mono rounded transition-all ${
-                timeSpeed === speed
-                  ? "bg-accent text-white font-semibold"
-                  : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-              }`}
-            >
-              {speed}x
-            </button>
-          ))}
-          {timeSpeed > 1 && (
-            <span className="ml-1.5 text-xs text-accent animate-pulse">
-              TIME-LAPSE
-            </span>
-          )}
-        </div>
-        <div className="rounded-lg bg-white/5 px-3 py-2 text-xs text-muted-foreground backdrop-blur-md">
-          Drag to rotate &middot; Scroll to zoom &middot; Click satellites to
-          track
-        </div>
+      {/* Time controls */}
+      <div className="absolute right-4 bottom-4 flex items-center gap-1 rounded-lg bg-black/60 px-3 py-2 backdrop-blur-md border border-white/5">
+        <span className="text-xs text-muted-foreground mr-1.5">Time</span>
+        {[1, 10, 100, 500].map((speed) => (
+          <button
+            key={speed}
+            onClick={() => setTimeSpeed(speed)}
+            className={`px-2 py-0.5 text-xs font-mono rounded transition-all ${
+              timeSpeed === speed
+                ? "bg-accent text-white font-semibold"
+                : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+            }`}
+          >
+            {speed}x
+          </button>
+        ))}
+        {timeSpeed > 1 && (
+          <span className="ml-1.5 text-xs text-accent animate-pulse">
+            TIME-LAPSE
+          </span>
+        )}
       </div>
 
       {/* Selected satellite info panel */}

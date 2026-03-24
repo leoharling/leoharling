@@ -5,11 +5,11 @@ import { Rocket, Globe, Sun, Sparkles, Telescope } from "lucide-react";
 
 // ── Scale band definitions ───────────────────────────────
 export const SCALE_BANDS = [
-  { id: "earth", label: "Earth", scaleLabel: "Surface", Icon: Rocket },
-  { id: "orbit", label: "Orbit", scaleLabel: "LEO–GEO", Icon: Globe },
-  { id: "solar-system", label: "Solar System", scaleLabel: "AU", Icon: Sun },
-  { id: "stellar", label: "Stars", scaleLabel: "Light Years", Icon: Sparkles },
-  { id: "galactic", label: "Galaxies", scaleLabel: "Mly", Icon: Telescope },
+  { id: "earth", label: "Earth", scaleLabel: "Surface", Icon: Rocket, description: "Active spaceports and upcoming launches pinned on the globe. Click a marker to see mission details and live countdown." },
+  { id: "orbit", label: "Orbit", scaleLabel: "LEO–GEO", Icon: Globe, description: "Live satellite positions in low Earth, medium, and geostationary orbit — propagated in real time from TLE data." },
+  { id: "solar-system", label: "Solar System", scaleLabel: "AU", Icon: Sun, description: "The eight planets with accurate orbital periods shown in motion. Sizes are illustrative — actual distances are vastly larger." },
+  { id: "stellar", label: "Stars", scaleLabel: "Light Years", Icon: Sparkles, description: "Nearby star systems within ~100 light-years, color-coded by spectral class. Our Sun sits at the center." },
+  { id: "galactic", label: "Galaxies", scaleLabel: "Mly", Icon: Telescope, description: "Known galaxy clusters and deep-sky objects spanning billions of light-years of the observable universe." },
 ] as const;
 
 export type ScaleBandId = (typeof SCALE_BANDS)[number]["id"];

@@ -15,6 +15,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!process.env.UCDP_API_KEY) {
+    return NextResponse.json({ error: "UCDP_API_KEY not set in environment" }, { status: 500 });
+  }
+
   const results: string[] = [];
 
   for (const conflictId of Object.keys(UCDP_CONFLICT_COUNTRIES)) {

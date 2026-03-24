@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Zap } from "lucide-react";
-import SectionHeading from "@/components/ui/SectionHeading";
 import NewsFeedItem from "@/components/tools/NewsFeedItem";
 import { CATEGORIES } from "@/lib/rss-feeds";
 import type { SignalType } from "@/lib/news-highlights";
@@ -49,15 +48,15 @@ export default function NewsFeedPage() {
         : items.filter((item) => item.category === activeCategory);
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-24">
-      <SectionHeading
-        title="Orbit Intel"
-        subtitle="Signal feed from the frontiers of aerospace, AI, biotech, energy, and defence. Tracking transformational technology, not incremental features."
-      />
+    <div className="mx-auto max-w-4xl px-6 pt-6 pb-12">
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold tracking-tight">Orbit Intel</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Signal feed from the frontiers of aerospace, AI, biotech, energy, and defence.</p>
+      </div>
 
       {/* Signal banner */}
       {!loading && signalItems.length > 0 && (
-        <div className="mb-8">
+        <div className="mb-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Zap size={14} className="text-amber-400" />
             <span>Noteworthy</span>
@@ -83,12 +82,12 @@ export default function NewsFeedPage() {
       )}
 
       {/* Category tabs */}
-      <div className="mb-8 flex flex-wrap gap-2">
+      <div className="mb-5 flex flex-wrap gap-1.5">
         {FILTER_CATEGORIES.map((cat) => (
           <button
             key={cat}
             onClick={() => setActiveCategory(cat)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
               activeCategory === cat
                 ? cat === "Noteworthy"
                   ? "bg-amber-500/20 text-amber-400"

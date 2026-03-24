@@ -538,6 +538,7 @@ function NotableSatellite({
       {isSelected && <primitive object={nadirLine} />}
 
       <group ref={groupRef}>
+        {/* Invisible larger hit area — makes probes much easier to click */}
         <mesh
           onClick={handleClick}
           onPointerOver={() => {
@@ -549,8 +550,14 @@ function NotableSatellite({
             document.body.style.cursor = "default";
           }}
         >
+          <sphereGeometry args={[0.12, 8, 8]} />
+          <meshBasicMaterial visible={false} />
+        </mesh>
+
+        {/* Visible dot */}
+        <mesh>
           <sphereGeometry
-            args={[hovered || isSelected ? 0.035 : 0.025, 12, 12]}
+            args={[hovered || isSelected ? 0.04 : 0.028, 12, 12]}
           />
           <meshBasicMaterial
             color={data.color}
@@ -705,9 +712,8 @@ function Scene({
     [onSelect]
   );
 
-  const handleMiss = useCallback(() => {
-    onSelect(null);
-  }, [onSelect]);
+  // Deselect is handled by the X button in the info panel only — no click-to-deselect
+  const handleMiss = useCallback(() => {}, []);
 
   return (
     <>

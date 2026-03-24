@@ -252,12 +252,22 @@ function FlyToController({ conflictCenter, conflictZoom, focusLocation, onFocuse
   const { current: map } = useMap();
   const prevConflictCenter = useRef(conflictCenter);
 
-  // Fly to conflict center only when the conflict changes
+  // Fly to new conflict with zoom-out arc — speed-based so long distances stay smooth
   useEffect(() => {
-    if (map && (prevConflictCenter.current[0] !== conflictCenter[0] || prevConflictCenter.current[1] !== conflictCenter[1])) {
-      map.flyTo({ center: [conflictCenter[1], conflictCenter[0]], zoom: conflictZoom, duration: 1500 });
+    if (!map) return;
+    if (prevConflictCenter.current[0] === conflictCenter[0] && prevConflictCenter.current[1] === conflictCenter[1]) {
+      prevConflictCenter.current = conflictCenter;
+      return;
     }
     prevConflictCenter.current = conflictCenter;
+
+    map.flyTo({
+      center: [conflictCenter[1], conflictCenter[0]],
+      zoom: conflictZoom,
+      speed: 0.8,   // slow enough to stay smooth over intercontinental distances
+      curve: 1.5,    // moderate arc — visible zoom-out without over-zooming
+      essential: true,
+    });
   }, [conflictCenter, conflictZoom, map]);
 
   // Fly to focused location, then clear it so the user can freely navigate
@@ -482,7 +492,6 @@ export default function ConflictMap({
     <div className="relative">
       <MapLayerControls layers={layerToggles} onToggle={toggleLayer} />
       <Map
-        key={conflict.id}
         ref={mapRef}
         reuseMaps
         initialViewState={{ longitude: conflict.center[1], latitude: conflict.center[0], zoom: conflict.zoom }}
