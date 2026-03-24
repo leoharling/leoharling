@@ -5,10 +5,7 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   ChevronRight,
-  Cpu,
-  BarChart3,
-  Users,
-  AlertTriangle,
+  Network,
 } from "lucide-react";
 import FadeIn from "@/components/ui/FadeIn";
 
@@ -57,39 +54,36 @@ export default function DCMToolPage() {
   return (
     <div className="overflow-x-hidden">
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="relative border-b border-white/[0.04] pb-24 pt-20">
+      <section className="relative border-b border-white/[0.04] pb-20 pt-8">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-cyan-500/5" />
         <div className="relative mx-auto max-w-7xl px-6">
           <FadeIn>
             <Link href="/projects" className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
               <ArrowLeft size={14} />All Projects
             </Link>
-          </FadeIn>
-          <div className="flex flex-col gap-12 lg:flex-row lg:items-end lg:gap-24">
-            <FadeIn className="flex-1">
-              <div className="mb-5 flex flex-wrap gap-2">
-                <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400">Aerospace-X</span>
-                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">Consulting Project</span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-muted-foreground">Python · Simulation</span>
+            <div className="mb-4 mt-6 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
+                <Network size={20} />
               </div>
-              <h1 className="gradient-text text-5xl font-bold tracking-tight sm:text-6xl">DCM Tool</h1>
-              <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-                A five-tier demand &amp; capacity simulation for an aerospace engine supply chain, cascading OEM demand through every supplier tier to detect capacity constraints before they stall production.
-              </p>
-            </FadeIn>
-            <FadeIn delay={0.2} className="flex flex-wrap gap-8 lg:flex-shrink-0">
-              {[
-                { n: "5", label: "Supply chain tiers" },
-                { n: "7", label: "Materials modelled" },
-                { n: "30+", label: "Consortium partners" },
-              ].map((s) => (
-                <div key={s.label} className="text-center">
-                  <p className="text-3xl font-bold text-accent">{s.n}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
-                </div>
+            </div>
+            <h1 className="gradient-text text-5xl font-bold tracking-tight sm:text-6xl">DCM Tool</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Demand and Capacity Management</p>
+            <p className="mt-3 text-xl font-medium text-blue-400">
+              Supply chain visibility across every tier.
+            </p>
+            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+              A demand and capacity simulation built within{" "}
+              <a href="https://www.aerospace-x.net/" target="_blank" rel="noopener noreferrer" className="text-foreground underline decoration-white/20 underline-offset-2 hover:decoration-white/50">Aerospace-X</a>
+              , a 30+ company aerospace consortium led by Airbus. The five-tier engine supply chain is a working example for{" "}
+              <a href="https://www.aerospace-x.net/de/mission/use-case-1.html" target="_blank" rel="noopener noreferrer" className="text-foreground underline decoration-white/20 underline-offset-2 hover:decoration-white/50">Use Case 1</a>
+              {" "}on cross-partner demand planning, and served as the foundation for industrial application development within the programme.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {["Python", "pandas", "Supply Chain Simulation", "Aerospace-X"].map((tag) => (
+                <span key={tag} className="rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-1 text-xs text-muted-foreground">{tag}</span>
               ))}
-            </FadeIn>
-          </div>
+            </div>
+          </FadeIn>
         </div>
       </section>
 
@@ -98,10 +92,7 @@ export default function DCMToolPage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid gap-8 lg:grid-cols-2 lg:gap-16 lg:items-start">
             <FadeIn direction="left">
-              <div className="mb-4 flex items-center gap-3 text-accent">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10"><Users size={16} /></div>
-                <span className="font-mono text-xs uppercase tracking-widest">Context</span>
-              </div>
+              <p className="mb-3 font-mono text-xs uppercase tracking-widest text-accent">Context</p>
               <h2 className="text-3xl font-bold tracking-tight">Why supply chain visibility breaks down</h2>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                 In aerospace, parts of an airplane for example contain thousands of parts sourced across <strong className="text-foreground">multiple supplier tiers</strong>. An OEM like Airbus sees its Tier-1 partners, but rarely has direct visibility into what Tier-2 or Tier-3 suppliers are producing, committing, or struggling with.
@@ -110,7 +101,9 @@ export default function DCMToolPage() {
                 This is fine when everything runs smoothly. It becomes a crisis when a critical component, with a <strong className="text-foreground">long lead time</strong> (e.g. 20 weeks), can quietly fall behind. By the time the shortage surfaces in a programme review, there is no longer enough time to recover. Production stalls.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                The <strong className="text-foreground">Aerospace-X</strong> project was created to close that gap of exchanging data based on a common standard with a 30+ company industry consortium led by Airbus.. The DCM Tool is part of that project and creates a simulation that propagates demand through every tier simultaneously, so shortfalls are visible <strong className="text-foreground">weeks or months before they become production problems</strong>.
+                The{" "}
+                <a href="https://www.aerospace-x.net/" target="_blank" rel="noopener noreferrer" className="font-semibold text-foreground underline decoration-white/20 underline-offset-2 hover:decoration-white/50">Aerospace-X</a>
+                {" "}project was created to close that gap, building a common data standard across a 30+ company industry consortium led by Airbus. The DCM Tool is part of that project: a simulation that propagates demand through every tier simultaneously, so shortfalls are visible <strong className="text-foreground">weeks or months before they become production problems</strong>.
               </p>
             </FadeIn>
             <FadeIn direction="right" delay={0.1}>
@@ -144,11 +137,8 @@ export default function DCMToolPage() {
       <section className="relative border-t border-white/[0.04]" style={{ background: "linear-gradient(180deg,rgb(5,9,18) 0%,rgb(7,12,22) 100%)" }}>
         <div className="mx-auto max-w-7xl px-6 py-20">
           <FadeIn className="mb-10">
-            <div className="mb-4 flex items-center gap-3 text-accent">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10"><Cpu size={16} /></div>
-              <span className="font-mono text-xs uppercase tracking-widest">Architecture</span>
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight">Example Engine Supply Chain within the DCM Tool</h2>
+            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-accent">Architecture</p>
+            <h2 className="text-3xl font-bold tracking-tight">DCM Tool - Example Engine Supply Chain</h2>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               A model of five tiers of an engine supply chain were modelled within the DCM Tool, from OEM demand down to raw material ingots. The tool tracks stock levels, lead times, and dependencies across every tier to detect bottlenecks weeks before they impact the production line. The diagram below shows a single engine supply chain, but the DCM Tool was created to model multiple supply chains simultaneously.
             </p>
@@ -235,13 +225,14 @@ export default function DCMToolPage() {
                     <motion.div initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.22 }}
                       className="flex h-24 w-full flex-col items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/[0.07] px-2 text-center">
                       <span className="mb-1.5 rounded bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[8px] font-bold text-emerald-400">TIER 2</span>
-                      <p className="text-sm font-bold">BladeA</p>
+                      <p className="text-sm font-bold">Blade A</p>
                       <p className="font-mono text-[9px] text-muted-foreground">LT: 14 wk</p>
+                      <p className="mt-0.5 font-mono text-[8px] text-teal-400/70">dual-source</p>
                     </motion.div>
                     <motion.div initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.24 }}
                       className="flex h-24 w-full flex-col items-center justify-center rounded-xl border border-teal-500/30 bg-teal-500/[0.07] px-2 text-center">
                       <span className="mb-1.5 rounded bg-teal-500/20 px-1.5 py-0.5 font-mono text-[8px] font-bold text-teal-400">TIER 2</span>
-                      <p className="text-sm font-bold">BladeB</p>
+                      <p className="text-sm font-bold">Blade B</p>
                       <p className="font-mono text-[9px] text-muted-foreground">LT: 16 wk</p>
                       <p className="mt-0.5 font-mono text-[8px] text-teal-400/70">dual-source</p>
                     </motion.div>
@@ -305,9 +296,9 @@ export default function DCMToolPage() {
                 </div>
                 <div className="flex flex-wrap items-center justify-around gap-6 rounded-xl border border-white/[0.05] bg-white/[0.02] px-5 py-3 sm:col-span-2">
                   {[
-                    { label: "Total LT horizon", value: "44+ wk", color: "text-blue-400" },
-                    { label: "Dual-source blades", value: "2 sites", color: "text-emerald-400" },
-                    { label: "Shared Forging input", value: "Disk + BladeA", color: "text-amber-400" },
+                    { label: "Total LT horizon", value: "44+ weeks", color: "text-blue-400" },
+                    { label: "Dual-sourcing modeled", value: "2 Blade options", color: "text-emerald-400" },
+                    { label: "Shared material inputs", value: "Disk + Blade A", color: "text-amber-400" },
                   ].map((s) => (
                     <div key={s.label} className="text-center">
                       <p className={`text-sm font-bold ${s.color}`}>{s.value}</p>
@@ -325,10 +316,7 @@ export default function DCMToolPage() {
       <section className="border-t border-white/[0.04] py-20">
         <div className="mx-auto max-w-7xl px-6">
           <FadeIn className="mb-10">
-            <div className="mb-4 flex items-center gap-3 text-accent">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10"><BarChart3 size={16} /></div>
-              <span className="font-mono text-xs uppercase tracking-widest">Simulation</span>
-            </div>
+            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-accent">Simulation</p>
             <h2 className="text-3xl font-bold tracking-tight">How the Simulation Works</h2>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               Each week, OEM demand is propagated backwards through the full bill of materials, tier by tier, accounting for lead times, risk-adjusted delivery rates, and current stock levels to forecast exactly where and when shortfalls will occur.
@@ -382,10 +370,7 @@ export default function DCMToolPage() {
       <section className="border-t border-white/[0.04] py-20">
         <div className="mx-auto max-w-7xl px-6">
           <FadeIn className="mb-12">
-            <div className="mb-4 flex items-center gap-3 text-accent">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10"><AlertTriangle size={16} /></div>
-              <span className="font-mono text-xs uppercase tracking-widest">Outputs</span>
-            </div>
+            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-accent">Outputs</p>
             <h2 className="text-3xl font-bold tracking-tight">Simulation Outputs</h2>
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground">Four chart types generated per run, each targeting a distinct planning decision.</p>
           </FadeIn>

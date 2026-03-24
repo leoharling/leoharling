@@ -85,24 +85,21 @@ const accentFor = (c: string) => {
 export default function SikoToolPage() {
   return (
     <div className="overflow-x-hidden">
-      {/* ── Back nav ─────────────────────────────────────────────────── */}
-      <div className="mx-auto max-w-7xl px-6 pt-8">
-        <Link href="/projects" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-          <ArrowLeft size={14} />All projects
-        </Link>
-      </div>
-
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="relative border-b border-white/[0.04] pb-20 pt-12">
+      <section className="relative border-b border-white/[0.04] pb-20 pt-8">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-500/8 via-transparent to-purple-500/5" />
         <div className="relative mx-auto max-w-7xl px-6">
           <FadeIn>
-            <div className="mb-4 flex items-center gap-3">
+            <Link href="/projects" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+              <ArrowLeft size={14} />All projects
+            </Link>
+            <div className="mb-4 mt-6 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-400">
                 <ShieldCheck size={20} />
               </div>
             </div>
             <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">SiKo Tool</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Sicherheitskonzept</p>
             <p className="mt-3 text-xl font-medium text-violet-400">
               IT-Grundschutz compliance that actually gets done.
             </p>

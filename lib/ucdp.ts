@@ -9,10 +9,11 @@
 const UCDP_BASE = "https://ucdpapi.pcr.uu.se/api";
 
 // GED 25.1 = historical (up to 2024), GED Candidate 25.01.25.12 = quarterly (2025)
-// GED Candidate monthly: 26.0.1 = Jan 2026, 26.0.2 = Feb 2026, etc.
+// GED Candidate monthly: 26.0.1 = Jan 2026, 26.0.2 = Feb 2026, 26.0.3 = Mar 2026, etc.
 const GED_VERSION = "25.1";
 const GED_CANDIDATE_VERSION = "25.01.25.12";
-const GED_MONTHLY_VERSION = "26.0.1"; // Latest available monthly release
+// All monthly releases to try — add new versions here as UCDP publishes them
+const GED_MONTHLY_VERSIONS = ["26.0.1", "26.0.2", "26.0.3"];
 
 /** Gleditsch-Ward country codes per conflict */
 export const UCDP_CONFLICT_COUNTRIES: Record<string, {
@@ -201,20 +202,22 @@ export async function fetchRecentEvents(
   const config = UCDP_CONFLICT_COUNTRIES[conflictId];
   if (!config) return [];
 
-  // Fetch from both quarterly (2025 data) and monthly (2026 data) in parallel
-  const [quarterly, monthly] = await Promise.all([
+  // Fetch quarterly (2025) + all monthly releases (2026) in parallel; skip missing versions gracefully
+  const results = await Promise.all([
     fetchAllPages("gedevents", GED_CANDIDATE_VERSION, {
       Country: config.codes.join(","),
       StartDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     }).catch(() => [] as UCDPRawEvent[]),
-    fetchAllPages("gedevents", GED_MONTHLY_VERSION, {
-      Country: config.codes.join(","),
-    }).catch(() => [] as UCDPRawEvent[]),
+    ...GED_MONTHLY_VERSIONS.map((v) =>
+      fetchAllPages("gedevents", v, {
+        Country: config.codes.join(","),
+      }).catch(() => [] as UCDPRawEvent[]),
+    ),
   ]);
 
   // Merge and deduplicate by event id
   const byId = new Map<number, UCDPRawEvent>();
-  for (const e of [...quarterly, ...monthly]) {
+  for (const e of results.flat()) {
     byId.set(e.id, e);
   }
   return [...byId.values()];

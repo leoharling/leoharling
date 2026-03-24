@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import {
@@ -57,7 +58,7 @@ const sections: ShowcaseSection[] = [
     title: "Intel",
     subtitle: "Orbit Intel",
     description:
-      "Signal feed from the frontiers of aerospace, AI, biotech, energy, and defence. Tracks transformational technology breakthroughs with automated signal detection.",
+      "Curated signal feed across aerospace, AI, biotech, energy, and defence. Filter by domain, surface noteworthy breakthroughs, and track the stories shaping the next decade of deep technology.",
     href: "/intel",
     icon: <Newspaper size={20} />,
     accentColor: "from-blue-500/20 to-cyan-500/10",
@@ -69,7 +70,7 @@ const sections: ShowcaseSection[] = [
     title: "Space",
     subtitle: "Launch Tracker & Satellites",
     description:
-      "Track upcoming rocket launches with real-time countdowns, explore past mission history, compare rocket specifications, and visualize satellite constellations in 3D.",
+      "Upcoming launches with live countdowns, past mission history broken down by provider, vehicle, orbit, and outcome, a full rocket database — plus a 3D satellite constellation visualizer with real-time orbital propagation and time-lapse controls.",
     href: "/space",
     icon: <Rocket size={20} />,
     accentColor: "from-violet-500/20 to-blue-500/10",
@@ -81,7 +82,7 @@ const sections: ShowcaseSection[] = [
     title: "Geopolitics",
     subtitle: "Conflict Monitor",
     description:
-      "Real-time tracking of active armed conflicts worldwide with aggregated news, casualty data, escalation badges, diplomatic tracking, and interactive frontline maps.",
+      "Active conflict tracking with an interactive globe, territory control overlays, and event feeds sourced from UCDP data. Switch between conflicts, explore actor profiles and diplomatic timelines, and monitor humanitarian displacement via UNHCR data.",
     href: "/geopolitics",
     icon: <Crosshair size={20} />,
     accentColor: "from-red-500/20 to-orange-500/10",
@@ -92,28 +93,34 @@ const sections: ShowcaseSection[] = [
 
 const projects = [
   {
-    title: "TrippyPlans",
-    description: "Collaborative trip planning with real-time sync.",
-    icon: <Plane size={20} />,
-    href: "https://trippyplans.com",
-    external: true,
-    status: "Live",
-  },
-  {
     title: "DCM Tool",
-    description: "Aerospace supply chain simulation & bottleneck analysis.",
+    tagline: "Supply chain visibility across every tier.",
+    description: "Demand and capacity simulation built for Aerospace-X. Models a five-tier engine supply chain to detect bottlenecks before they reach the production line.",
     icon: <Network size={20} />,
-    href: "/projects",
+    href: "/projects/dcm-tool",
     external: false,
-    status: "In Dev",
+    accent: "text-blue-400",
+    iconBg: "bg-blue-500/10 text-blue-400",
   },
   {
     title: "SiKo Tool",
-    description: "IT-Grundschutz compliance & Sicherheitskonzepte builder.",
+    tagline: "IT-Grundschutz compliance without the overhead.",
+    description: "Browser-native tool for BSI IT-Grundschutz 200-2. Enter an asset once — protection needs, modelling, and risk analysis stay in sync automatically.",
     icon: <ShieldCheck size={20} />,
-    href: "/projects",
+    href: "/projects/siko-tool",
     external: false,
-    status: "In Dev",
+    accent: "text-violet-400",
+    iconBg: "bg-violet-500/10 text-violet-400",
+  },
+  {
+    title: "TrippyPlans",
+    tagline: "Collaborative trip planning, reimagined.",
+    description: "Plan trips with friends in real-time: shared itineraries, destination discovery, and collaborative editing.",
+    icon: <Plane size={20} />,
+    href: "https://trippyplans.com",
+    external: true,
+    accent: "text-emerald-400",
+    iconBg: "bg-emerald-500/10 text-emerald-400",
   },
 ];
 
@@ -287,19 +294,10 @@ export default function Home() {
             {projects.map((project, i) => {
               const inner = (
                 <>
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                  <div className="mb-4">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${project.iconBg}`}>
                       {project.icon}
                     </div>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                        project.status === "Live"
-                          ? "bg-emerald-500/10 text-emerald-400"
-                          : "bg-amber-500/10 text-amber-400"
-                      }`}
-                    >
-                      {project.status}
-                    </span>
                   </div>
                   <h3 className="flex items-center gap-2 text-base font-semibold">
                     {project.title}
@@ -307,7 +305,10 @@ export default function Home() {
                       <ExternalLink size={12} className="text-muted" />
                     )}
                   </h3>
-                  <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+                  <p className={`mt-0.5 text-sm font-medium ${project.accent}`}>
+                    {project.tagline}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                     {project.description}
                   </p>
                 </>
@@ -325,9 +326,12 @@ export default function Home() {
                       {inner}
                     </a>
                   ) : (
-                    <div className="glass-card group flex h-full flex-col p-6 transition-all duration-300 hover:scale-[1.02]">
+                    <Link
+                      href={project.href}
+                      className="glass-card group flex h-full flex-col p-6 transition-all duration-300 hover:scale-[1.02]"
+                    >
                       {inner}
-                    </div>
+                    </Link>
                   )}
                 </FadeIn>
               );

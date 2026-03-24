@@ -482,7 +482,9 @@ export default function ConflictMap({
     <div className="relative">
       <MapLayerControls layers={layerToggles} onToggle={toggleLayer} />
       <Map
+        key={conflict.id}
         ref={mapRef}
+        reuseMaps
         initialViewState={{ longitude: conflict.center[1], latitude: conflict.center[0], zoom: conflict.zoom }}
         style={{ width: "100%", minHeight: "600px" }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
@@ -492,7 +494,6 @@ export default function ConflictMap({
         onClick={onMapClick}
         onMouseMove={onMapMouseMove}
         onMouseLeave={() => setPopup(null)}
-
       >
         <FlyToController
           conflictCenter={conflict.center}
