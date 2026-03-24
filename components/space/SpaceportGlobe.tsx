@@ -217,6 +217,8 @@ function getSafeAzimuthRange(lat: number, lon: number): [number, number] {
   if (lon > -55 && lon < -48 && lat > 0 && lat < 10) return [0, 100];      // Kourou
   if (lon > 55 && lon < 75 && lat > 40 && lat < 50) return [30, 100];      // Baikonur
   if (lon > 35 && lon < 50 && lat > 60) return [0, 80];                    // Plesetsk
+  if (lon > 13 && lon < 19 && lat > 68 && lat < 71) return [285, 360];    // Andøya (NW over Norwegian Sea)
+  if (lon > 19 && lon < 23 && lat > 66 && lat < 69) return [280, 360];    // Esrange (NW over Norwegian Sea)
   if (lon > 125 && lon < 140 && lat > 45 && lat < 55) return [50, 120];    // Vostochny
   if (lon > 75 && lon < 85 && lat > 10 && lat < 20) return [80, 140];      // India
   if (lon > 128 && lon < 135 && lat > 28 && lat < 35) return [150, 220];   // Japan
@@ -258,7 +260,12 @@ function computeAscent(padLat: number, padLon: number, inclDeg: number, parkingA
   if (cosLat > 0.001) {
     const sinAz = Math.max(-1, Math.min(1, Math.cos(inclRad) / cosLat));
     let azRad = Math.asin(sinAz);
-    if (inclDeg > 90) azRad = Math.PI - azRad;
+    if (inclDeg > 90) {
+      // High-latitude northern sites (>55°N, e.g. Andøya, Esrange): retrograde orbits
+      // head NW/N over the sea — use the 2π+azRad solution (~337° for Andøya SSO).
+      // Lower-latitude sites (e.g. Vandenberg 34.6°N): SW solution (π - azRad) is correct.
+      azRad = padLat > 55 ? (2 * Math.PI + azRad) : (Math.PI - azRad);
+    }
     optAzDeg = (azRad * 180) / Math.PI;
   }
   const safeRange = getSafeAzimuthRange(padLat, padLon);
@@ -586,7 +593,9 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
     if (cosLat > 0.001) {
       const sinAz = Math.max(-1, Math.min(1, Math.cos(inclRad) / cosLat));
       let azRad = Math.asin(sinAz);
-      if ((trajectoryTemplate?.inclinationDeg ?? 0) > 90) azRad = Math.PI - azRad;
+      if ((trajectoryTemplate?.inclinationDeg ?? 0) > 90) {
+        azRad = selectedLocation.lat > 55 ? (2 * Math.PI + azRad) : (Math.PI - azRad);
+      }
       optAzDeg = (azRad * 180) / Math.PI;
     }
     const safeRange = getSafeAzimuthRange(selectedLocation.lat, selectedLocation.lon);
