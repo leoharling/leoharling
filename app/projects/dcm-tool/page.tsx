@@ -104,13 +104,13 @@ export default function DCMToolPage() {
               </div>
               <h2 className="text-3xl font-bold tracking-tight">Why supply chain visibility breaks down</h2>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                In aerospace, a finished engine contains thousands of parts sourced across <strong className="text-foreground">four or five supplier tiers</strong>. An OEM like Airbus sees its Tier-1 partners, but rarely has direct visibility into what Tier-2 or Tier-3 suppliers are producing, committing, or struggling with.
+                In aerospace, parts of an airplane for example contain thousands of parts sourced across <strong className="text-foreground">multiple supplier tiers</strong>. An OEM like Airbus sees its Tier-1 partners, but rarely has direct visibility into what Tier-2 or Tier-3 suppliers are producing, committing, or struggling with.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                This is fine when everything runs smoothly. It becomes a crisis when a critical component, a forging or a disk with a <strong className="text-foreground">20-week lead time</strong>, can quietly fall behind. By the time the shortage surfaces in a programme review, there is no longer enough time to recover. Production stalls.
+                This is fine when everything runs smoothly. It becomes a crisis when a critical component, with a <strong className="text-foreground">long lead time</strong> (e.g. 20 weeks), can quietly fall behind. By the time the shortage surfaces in a programme review, there is no longer enough time to recover. Production stalls.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                The DCM Tool was built to close that gap: a simulation that propagates demand through every tier simultaneously, so shortfalls are visible <strong className="text-foreground">weeks or months before they become production problems</strong>. Built within <strong className="text-foreground">Aerospace-X</strong>, a 30+ company industry consortium led by Airbus.
+                The <strong className="text-foreground">Aerospace-X</strong> project was created to close that gap of exchanging data based on a common standard with a 30+ company industry consortium led by Airbus.. The DCM Tool is part of that project and creates a simulation that propagates demand through every tier simultaneously, so shortfalls are visible <strong className="text-foreground">weeks or months before they become production problems</strong>.
               </p>
             </FadeIn>
             <FadeIn direction="right" delay={0.1}>
@@ -148,9 +148,9 @@ export default function DCMToolPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10"><Cpu size={16} /></div>
               <span className="font-mono text-xs uppercase tracking-widest">Architecture</span>
             </div>
-            <h2 className="text-3xl font-bold tracking-tight">Five-Tier Engine Supply Chain</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Example Engine Supply Chain within the DCM Tool</h2>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              All five tiers are monitored, from OEM demand down to raw material ingots. The tool tracks stock levels, lead times, and dependencies across every tier to detect bottlenecks weeks before they impact the production line.
+              A model of five tiers of an engine supply chain were modelled within the DCM Tool, from OEM demand down to raw material ingots. The tool tracks stock levels, lead times, and dependencies across every tier to detect bottlenecks weeks before they impact the production line. The diagram below shows a single engine supply chain, but the DCM Tool was created to model multiple supply chains simultaneously.
             </p>
           </FadeIn>
 

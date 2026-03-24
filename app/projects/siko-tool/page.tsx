@@ -151,10 +151,10 @@ export default function SikoToolPage() {
               <div className="space-y-3">
                 {[
                   { label: "Methodology phases (BSI 200-2)", value: "6", color: "text-violet-400" },
-                  { label: "BSI building blocks available", value: "111+", color: "text-blue-400" },
+                  { label: "IT-Grundschutz (2023) building blocks available", value: "111", color: "text-blue-400" },
                   { label: "Typical requirements per concept", value: "200–500", color: "text-amber-400" },
                   { label: "Duration without tool", value: "3–6 months", color: "text-red-400" },
-                  { label: "Duration with tool", value: "Weeks", color: "text-emerald-400" },
+                  { label: "Possible duration with tool", value: "Weeks", color: "text-emerald-400" },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3">
                     <span className="text-sm text-muted-foreground">{row.label}</span>
@@ -183,7 +183,7 @@ export default function SikoToolPage() {
             {[
               {
                 icon: <Clock size={18} />,
-                color: "red",
+                color: "amber",
                 title: "Month-long documentation cycles",
                 body: "A full IT security concept for a medium-sized organisation requires 3–6 months. Maintaining and updating it annually adds ongoing overhead that most teams cannot absorb.",
               },
@@ -195,7 +195,7 @@ export default function SikoToolPage() {
               },
               {
                 icon: <Layers size={18} />,
-                color: "red",
+                color: "amber",
                 title: "High barrier, low actual compliance",
                 body: "Because the process is so burdensome, many organisations produce a concept once and never revisit it. A security concept that isn't maintained doesn't protect anyone and fails audits.",
               },
@@ -207,7 +207,7 @@ export default function SikoToolPage() {
               },
               {
                 icon: <FileDown size={18} />,
-                color: "red",
+                color: "amber",
                 title: "Audit preparation is its own project",
                 body: "Assembling the final SiKo document from scattered files takes days. When auditors request specific evidence or traceability, the data isn't structured to provide it quickly.",
               },
@@ -283,7 +283,7 @@ export default function SikoToolPage() {
                     {[
                       "6 separate Excel files, one per phase",
                       "Same asset re-entered 6 times",
-                      "Schutzbedarf assessed manually, per asset",
+                      "Everything assessed manually, for each asset",
                       "Manual document assembly for audits",
                       "Concept outdated within months",
                     ].map((item) => (
@@ -300,7 +300,7 @@ export default function SikoToolPage() {
                     {[
                       "One application, all six phases connected",
                       "Asset entered once, synced everywhere",
-                      "Schutzbedarf derived automatically",
+                      "Everything populated automatically",
                       "Complete Word export in one click",
                       "Concept stays current: update assets, not documents",
                     ].map((item) => (

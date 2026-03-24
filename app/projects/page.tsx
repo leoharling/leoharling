@@ -13,18 +13,6 @@ import FadeIn from "@/components/ui/FadeIn";
 
 const projects = [
   {
-    title: "TrippyPlans",
-    tagline: "Collaborative trip planning, reimagined.",
-    description:
-      "Plan trips with friends in real-time: shared itineraries, destination discovery, and collaborative editing. Full-stack web app with live sync.",
-    icon: <Plane size={20} />,
-    href: "https://trippyplans.com",
-    external: true,
-    tags: ["Next.js", "Supabase", "Real-time"],
-    accent: "from-emerald-500/15 to-teal-500/5",
-    accentColor: "emerald",
-  },
-  {
     title: "DCM Tool",
     tagline: "Supply chain visibility across every tier.",
     description:
@@ -47,6 +35,18 @@ const projects = [
     tags: ["Next.js", "BSI 200-2", "Public Sector"],
     accent: "from-violet-500/15 to-purple-500/5",
     accentColor: "violet",
+  },
+  {
+    title: "TrippyPlans",
+    tagline: "Collaborative trip planning, reimagined.",
+    description:
+      "Plan trips with friends in real-time: shared itineraries, destination discovery, and collaborative editing. Full-stack web app with live sync.",
+    icon: <Plane size={20} />,
+    href: "https://trippyplans.com",
+    external: true,
+    tags: ["Next.js", "Supabase", "Real-time"],
+    accent: "from-emerald-500/15 to-teal-500/5",
+    accentColor: "emerald",
   },
 ];
 

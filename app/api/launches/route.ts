@@ -13,19 +13,27 @@ export async function GET(request: NextRequest) {
 
   // All-time past launches: merge all cached years
   if (type === "past" && year === "all") {
-    const { data: rows } = await supabase
+    const { data: rows, error } = await supabase
       .from("launch_cache")
       .select("data")
       .like("cache_key", "past_%");
+
+    if (error) {
+      return NextResponse.json(
+        { error: "Failed to load launch data" },
+        { status: 500 }
+      );
+    }
 
     const all = (rows || []).flatMap(
       (r) => ((r.data || []) as Record<string, unknown>[])
     );
     all.sort((a, b) => String(b.net || "").localeCompare(String(a.net || "")));
 
+    // No CDN caching: this aggregates dynamically from Supabase as years get populated
     return NextResponse.json(
       { results: all, cached: true },
-      { headers: CACHE_HEADERS }
+      { headers: { "Cache-Control": "no-store" } }
     );
   }
 
