@@ -3,8 +3,6 @@
 import { useState, useMemo } from "react";
 import Map, { Marker } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import MapLayerControls from "@/components/tools/MapLayerControls";
-import type { LayerToggle } from "@/components/tools/MapLayerControls";
 import {
   DATA_CENTERS,
   OPERATOR_COLORS,
@@ -122,16 +120,12 @@ export interface DataCenterMapProps {
   visibleOperators: Set<Operator>;
   showExisting: boolean;
   showAnnounced: boolean;
-  layers: LayerToggle[];
-  onToggleLayer: (id: string) => void;
 }
 
 export default function DataCenterMap({
   visibleOperators,
   showExisting,
   showAnnounced,
-  layers,
-  onToggleLayer,
 }: DataCenterMapProps) {
   const visible = useMemo(() => {
     return DATA_CENTERS.filter((dc) => {
@@ -154,8 +148,6 @@ export default function DataCenterMap({
           <DCDot key={dc.id} dc={dc} />
         ))}
       </Map>
-
-      <MapLayerControls layers={layers} onToggle={onToggleLayer} />
 
       {/* Attribution */}
       <div className="absolute bottom-2 right-2 text-[9px] text-white/20 pointer-events-none">

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
-import { Search, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, X, ChevronDown, LayoutGrid, Building2 } from "lucide-react";
 import { AI_MODELS, MODELS_LAST_UPDATED, type AIModel, type ModelType } from "@/lib/ai-models";
 
 const MODALITY_COLORS: Record<string, string> = {
@@ -49,9 +49,10 @@ interface ModelCardProps {
   model: AIModel;
   highlighted: boolean;
   faded: boolean;
+  grouped?: boolean;
 }
 
-function ModelCard({ model, highlighted, faded }: ModelCardProps) {
+function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -70,12 +71,15 @@ function ModelCard({ model, highlighted, faded }: ModelCardProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-              style={{ background: `${model.providerColor}20`, color: model.providerColor }}
-            >
-              {model.provider}
-            </span>
+            {/* Only show provider badge in flat (non-grouped) view */}
+            {!grouped && (
+              <span
+                className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                style={{ background: `${model.providerColor}20`, color: model.providerColor }}
+              >
+                {model.provider}
+              </span>
+            )}
             <span className={`text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
               model.type === "frontier"
                 ? "bg-accent/15 text-accent"
@@ -150,6 +154,88 @@ function ModelCard({ model, highlighted, faded }: ModelCardProps) {
   );
 }
 
+// ── Provider section for grouped view ──────────────────────────────────────
+
+interface ProviderSectionProps {
+  provider: string;
+  color: string;
+  models: AIModel[];
+  highlightModelId?: string | null;
+  timelineDate: Date;
+  mounted: boolean;
+}
+
+function ProviderSection({ provider, color, models, highlightModelId, timelineDate, mounted }: ProviderSectionProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div className="glass-card overflow-hidden">
+      {/* Section header */}
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors"
+      >
+        <span
+          className="w-3 h-3 rounded-full shrink-0"
+          style={{ background: color }}
+        />
+        <span className="font-semibold text-foreground text-sm">{provider}</span>
+        <span
+          className="text-[10px] font-medium px-2 py-0.5 rounded-full ml-1"
+          style={{ background: `${color}20`, color }}
+        >
+          {models.length} {models.length === 1 ? "model" : "models"}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`ml-auto text-muted-foreground transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+        />
+      </button>
+
+      {/* Models grid */}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div
+              className="px-4 pb-4 pt-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+              style={{ borderTop: `1px solid ${color}18` }}
+            >
+              {models.map((model) => (
+                <motion.div
+                  key={model.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <ModelCard
+                    model={model}
+                    highlighted={highlightModelId === model.id}
+                    faded={mounted && new Date(model.releaseDate) > timelineDate}
+                    grouped
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Provider order (determines display order in grouped view) ──────────────
+const PROVIDER_ORDER = [
+  "Anthropic", "OpenAI", "Google", "Meta", "xAI",
+  "DeepSeek", "Alibaba", "Mistral", "NVIDIA", "AWS", "Microsoft",
+];
+
 export interface ModelsTabProps {
   highlightModelId?: string | null;
   onHighlightClear?: () => void;
@@ -161,6 +247,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
   const [search, setSearch] = useState("");
   const [mounted, setMounted] = useState(false);
   const [timelineValue, setTimelineValue] = useState(100); // 0–100 percentage
+  const [groupByCompany, setGroupByCompany] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -190,10 +277,30 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
     });
   }, [typeFilter, activeTag, search]);
 
+  // Group filtered models by provider
+  const groupedModels = useMemo(() => {
+    const map = new Map<string, { color: string; models: AIModel[] }>();
+    for (const m of filtered) {
+      if (!map.has(m.provider)) {
+        map.set(m.provider, { color: m.providerColor, models: [] });
+      }
+      map.get(m.provider)!.models.push(m);
+    }
+    // Sort providers by preferred order, then alphabetically
+    return [...map.entries()].sort(([a], [b]) => {
+      const ai = PROVIDER_ORDER.indexOf(a);
+      const bi = PROVIDER_ORDER.indexOf(b);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [filtered]);
+
   // Timeline year markers
   const years = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
   const startMs = FRONTIER_FIRST_DATE.getTime();
-  const endMs = mounted ? Date.now() : new Date("2026-03-29").getTime();
+  const endMs = mounted ? Date.now() : new Date("2026-04-05").getTime();
   const totalMs = endMs - startMs;
 
   function yearToPercent(year: number) {
@@ -212,7 +319,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
 
       {/* Controls */}
       <div className="flex flex-col gap-3">
-        {/* Type toggle + search */}
+        {/* Type toggle + view toggle + search */}
         <div className="flex flex-wrap items-center gap-2">
           {(["all", "frontier", "open-source"] as const).map((t) => (
             <button
@@ -227,6 +334,31 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
               {t === "all" ? "All Models" : t === "frontier" ? "Frontier" : "Open Source"}
             </button>
           ))}
+
+          {/* View mode toggle */}
+          <div className="flex items-center rounded-lg bg-white/5 p-0.5 ml-1">
+            <button
+              onClick={() => setGroupByCompany(false)}
+              title="Grid view"
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all ${
+                !groupByCompany ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutGrid size={12} />
+              <span className="hidden sm:inline">Grid</span>
+            </button>
+            <button
+              onClick={() => setGroupByCompany(true)}
+              title="Group by company"
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all ${
+                groupByCompany ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Building2 size={12} />
+              <span className="hidden sm:inline">By Company</span>
+            </button>
+          </div>
+
           <div className="relative ml-auto">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
@@ -263,10 +395,26 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
         </div>
       </div>
 
-      {/* Model grid */}
+      {/* Model content */}
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm">No models match the current filters.</div>
+      ) : groupByCompany ? (
+        /* ── Grouped by company ── */
+        <div className="space-y-3">
+          {groupedModels.map(([provider, { color, models }]) => (
+            <ProviderSection
+              key={provider}
+              provider={provider}
+              color={color}
+              models={models}
+              highlightModelId={highlightModelId}
+              timelineDate={timelineDate}
+              mounted={mounted}
+            />
+          ))}
+        </div>
       ) : (
+        /* ── Flat grid ── */
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((model) => (
             <motion.div

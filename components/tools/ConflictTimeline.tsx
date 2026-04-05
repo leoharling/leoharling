@@ -317,49 +317,58 @@ export default function ConflictTimeline({
         )}
       </div>
 
-      {/* Unified info area */}
-      {!isAtNow && (
-        <div className="mt-2">
-          {activeMilestone ? (
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(activeMilestone.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </span>
-                  <span className="text-white/15 text-[10px]">·</span>
-                  <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                    {activeMilestone.category}
-                  </span>
-                  <span className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[9px] text-muted-foreground/60">
-                    {activeMilestone.phase}
-                  </span>
+      {/* Unified info area — grid animation prevents layout shifts when appearing/disappearing */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateRows: isAtNow ? "0fr" : "1fr",
+          transition: "grid-template-rows 0.2s ease",
+        }}
+      >
+        <div style={{ overflow: "hidden" }}>
+          {/* Fixed minHeight so milestone card ↔ date text swap never shifts the map */}
+          <div className="mt-2" style={{ minHeight: 96 }}>
+            {!isAtNow && (activeMilestone ? (
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(activeMilestone.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    <span className="text-white/15 text-[10px]">·</span>
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {activeMilestone.category}
+                    </span>
+                    <span className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[9px] text-muted-foreground/60">
+                      {activeMilestone.phase}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => onTimeChange?.(null)}
+                    className="shrink-0 text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+                  >
+                    Return to Now
+                  </button>
                 </div>
+                <p className="mt-2 text-sm font-semibold">{activeMilestone.title}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{activeMilestone.description}</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground">
+                  Viewing: {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </span>
                 <button
                   onClick={() => onTimeChange?.(null)}
-                  className="shrink-0 text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+                  className="text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
                 >
                   Return to Now
                 </button>
               </div>
-              <p className="mt-2 text-sm font-semibold">{activeMilestone.title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{activeMilestone.description}</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 min-h-[18px]">
-              <span className="text-[10px] text-muted-foreground">
-                Viewing: {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-              </span>
-              <button
-                onClick={() => onTimeChange?.(null)}
-                className="text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
-              >
-                Return to Now
-              </button>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
