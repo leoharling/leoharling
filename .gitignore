@@ -27,8 +27,8 @@
 .DS_Store
 *.pem
 
-# claude code local settings (contains permissions, not for sharing)
-.claude/
+# claude code
+/.claude
 
 # playwright mcp screenshots
 .playwright-mcp/
