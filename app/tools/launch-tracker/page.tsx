@@ -31,7 +31,7 @@ interface Launch {
 type Tab = "upcoming" | "past" | "rockets";
 
 const TABS: { key: Tab; label: string; icon: typeof CalendarClock }[] = [
-  { key: "upcoming", label: "Upcoming", icon: CalendarClock },
+  { key: "upcoming", label: "Upcoming Launches", icon: CalendarClock },
   { key: "past", label: "Past Launches", icon: History },
   { key: "rockets", label: "Rockets", icon: RocketIcon },
 ];

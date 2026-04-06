@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, ChevronDown, LayoutGrid, Building2 } from "lucide-react";
 import { AI_MODELS, MODELS_LAST_UPDATED, type AIModel, type ModelType } from "@/lib/ai-models";
 
+// ── Constants ──────────────────────────────────────────────────────────────
+
 const MODALITY_COLORS: Record<string, string> = {
   text:  "#94a3b8",
   image: "#a855f7",
@@ -12,6 +14,14 @@ const MODALITY_COLORS: Record<string, string> = {
   audio: "#22c55e",
   code:  "#3b82f6",
 };
+
+const BENCHMARK_META = {
+  mmlu:     { label: "MMLU",      color: "#f59e0b", desc: "General knowledge across 57 subjects (0–100%)" },
+  gpqa:     { label: "GPQA",      color: "#3b82f6", desc: "PhD-level science reasoning (0–100%)" },
+  sweBench: { label: "SWE-Bench", color: "#22c55e", desc: "Solving real GitHub issues with code (0–100%)" },
+} as const;
+
+type BenchKey = keyof typeof BENCHMARK_META;
 
 const QUICK_FILTERS = [
   { label: "Best for Coding", tag: "Best for Coding" },
@@ -21,7 +31,15 @@ const QUICK_FILTERS = [
   { label: "Reasoning",       tag: "Reasoning" },
 ];
 
-const FRONTIER_FIRST_DATE = new Date("2020-06-11"); // GPT-3 release
+// ChatGPT public launch — timeline start
+const TIMELINE_START = new Date("2022-11-30");
+
+const PROVIDER_ORDER = [
+  "Anthropic", "OpenAI", "Google", "Meta", "xAI",
+  "DeepSeek", "Alibaba", "Mistral", "NVIDIA", "AWS", "Microsoft",
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function fmtCost(n: number): string {
   if (n === 0) return "Self-hosted";
@@ -34,16 +52,31 @@ function fmtContext(k: number): string {
   return `${k}K`;
 }
 
-function BenchmarkCell({ label, value }: { label: string; value?: number }) {
+// ── BenchmarkBar ────────────────────────────────────────────────────────────
+
+function BenchmarkBar({ bench, value }: { bench: BenchKey; value?: number }) {
+  const { label, color } = BENCHMARK_META[bench];
   return (
-    <div className="text-center">
-      <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className="text-sm font-semibold text-foreground mt-0.5">
-        {value != null ? `${value}%` : "—"}
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] text-muted-foreground font-medium">{label}</span>
+        <span className="text-[10px] font-semibold text-foreground">
+          {value != null ? `${value}%` : "—"}
+        </span>
+      </div>
+      <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+        {value != null && (
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${value}%`, background: color }}
+          />
+        )}
       </div>
     </div>
   );
 }
+
+// ── ModelCard ──────────────────────────────────────────────────────────────
 
 interface ModelCardProps {
   model: AIModel;
@@ -60,6 +93,8 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
     }
   }, [highlighted]);
 
+  const hasBenchmarks = model.mmlu != null || model.gpqa != null || model.sweBench != null;
+
   return (
     <div
       ref={cardRef}
@@ -67,11 +102,10 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
         highlighted ? "ring-2 ring-accent/70 bg-accent/5" : ""
       } ${faded ? "opacity-30" : "opacity-100"}`}
     >
-      {/* Header row */}
+      {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Only show provider badge in flat (non-grouped) view */}
             {!grouped && (
               <span
                 className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
@@ -93,7 +127,6 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
             {new Date(model.releaseDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
           </div>
         </div>
-        {/* Modalities */}
         <div className="flex gap-1 shrink-0 mt-1">
           {model.modalities.map((m) => (
             <span
@@ -107,11 +140,17 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
       </div>
 
       {/* Benchmarks */}
-      <div className="grid grid-cols-3 gap-1 rounded-lg bg-white/[0.03] px-3 py-2">
-        <BenchmarkCell label="MMLU" value={model.mmlu} />
-        <BenchmarkCell label="GPQA" value={model.gpqa} />
-        <BenchmarkCell label="SWE-Bench" value={model.sweBench} />
-      </div>
+      {hasBenchmarks ? (
+        <div className="rounded-lg bg-white/[0.03] px-3 py-2.5 flex flex-col gap-2">
+          <BenchmarkBar bench="mmlu"     value={model.mmlu} />
+          <BenchmarkBar bench="gpqa"     value={model.gpqa} />
+          <BenchmarkBar bench="sweBench" value={model.sweBench} />
+        </div>
+      ) : (
+        <div className="rounded-lg bg-white/[0.03] px-3 py-2 text-[10px] text-muted-foreground/50 italic text-center">
+          No benchmark data published
+        </div>
+      )}
 
       {/* Context + cost */}
       <div className="flex items-center justify-between text-xs">
@@ -154,7 +193,7 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
   );
 }
 
-// ── Provider section for grouped view ──────────────────────────────────────
+// ── ProviderSection (grouped view) ─────────────────────────────────────────
 
 interface ProviderSectionProps {
   provider: string;
@@ -167,18 +206,13 @@ interface ProviderSectionProps {
 
 function ProviderSection({ provider, color, models, highlightModelId, timelineDate, mounted }: ProviderSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
-
   return (
     <div className="glass-card overflow-hidden">
-      {/* Section header */}
       <button
         onClick={() => setCollapsed((c) => !c)}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors"
       >
-        <span
-          className="w-3 h-3 rounded-full shrink-0"
-          style={{ background: color }}
-        />
+        <span className="w-3 h-3 rounded-full shrink-0" style={{ background: color }} />
         <span className="font-semibold text-foreground text-sm">{provider}</span>
         <span
           className="text-[10px] font-medium px-2 py-0.5 rounded-full ml-1"
@@ -191,8 +225,6 @@ function ProviderSection({ provider, color, models, highlightModelId, timelineDa
           className={`ml-auto text-muted-foreground transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
         />
       </button>
-
-      {/* Models grid */}
       <AnimatePresence initial={false}>
         {!collapsed && (
           <motion.div
@@ -208,12 +240,7 @@ function ProviderSection({ provider, color, models, highlightModelId, timelineDa
               style={{ borderTop: `1px solid ${color}18` }}
             >
               {models.map((model) => (
-                <motion.div
-                  key={model.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
+                <motion.div key={model.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }}>
                   <ModelCard
                     model={model}
                     highlighted={highlightModelId === model.id}
@@ -230,11 +257,278 @@ function ProviderSection({ provider, color, models, highlightModelId, timelineDa
   );
 }
 
-// ── Provider order (determines display order in grouped view) ──────────────
-const PROVIDER_ORDER = [
-  "Anthropic", "OpenAI", "Google", "Meta", "xAI",
-  "DeepSeek", "Alibaba", "Mistral", "NVIDIA", "AWS", "Microsoft",
-];
+// ── BenchmarkTrendsChart ────────────────────────────────────────────────────
+
+interface TooltipState {
+  x: number;
+  y: number;
+  model: AIModel;
+  bench: BenchKey;
+  value: number;
+}
+
+function BenchmarkTrendsChart() {
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [activeBenches, setActiveBenches] = useState<Set<BenchKey>>(
+    new Set(["mmlu", "gpqa", "sweBench"])
+  );
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const W = 800;
+  const H = 220;
+  const PAD = { top: 16, right: 24, bottom: 32, left: 36 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const startMs = TIMELINE_START.getTime();
+  const endMs = new Date("2026-04-06").getTime();
+  const totalMs = endMs - startMs;
+
+  function xOf(dateStr: string) {
+    const t = new Date(dateStr).getTime();
+    return PAD.left + ((t - startMs) / totalMs) * chartW;
+  }
+  function yOf(score: number) {
+    return PAD.top + chartH - (score / 100) * chartH;
+  }
+
+  // Build per-benchmark sorted data points
+  const series = useMemo(() => {
+    const result: Record<BenchKey, { model: AIModel; value: number }[]> = {
+      mmlu: [], gpqa: [], sweBench: [],
+    };
+    for (const m of AI_MODELS) {
+      if (new Date(m.releaseDate) < TIMELINE_START) continue;
+      if (m.mmlu     != null) result.mmlu.push({ model: m, value: m.mmlu });
+      if (m.gpqa     != null) result.gpqa.push({ model: m, value: m.gpqa });
+      if (m.sweBench != null) result.sweBench.push({ model: m, value: m.sweBench });
+    }
+    for (const key of Object.keys(result) as BenchKey[]) {
+      result[key].sort((a, b) =>
+        new Date(a.model.releaseDate).getTime() - new Date(b.model.releaseDate).getTime()
+      );
+    }
+    return result;
+  }, []);
+
+  // Frontier line: running maximum over time per benchmark
+  function frontierPath(points: { model: AIModel; value: number }[]) {
+    if (points.length === 0) return "";
+    let best = 0;
+    const segments: string[] = [];
+    for (const { model, value } of points) {
+      const x = xOf(model.releaseDate);
+      if (value > best) {
+        if (best > 0) {
+          // horizontal line to this x at old best, then jump up
+          segments.push(`L ${x} ${yOf(best)}`);
+        }
+        best = value;
+        segments.push(`L ${x} ${yOf(best)}`);
+      }
+    }
+    // extend to right edge
+    segments.push(`L ${PAD.left + chartW} ${yOf(best)}`);
+    const first = points[0];
+    return `M ${xOf(first.model.releaseDate)} ${yOf(first.value)} ${segments.join(" ")}`;
+  }
+
+  // Year ticks
+  const years = [2023, 2024, 2025, 2026];
+
+  function toggleBench(b: BenchKey) {
+    setActiveBenches((prev) => {
+      const next = new Set(prev);
+      if (next.has(b)) { if (next.size > 1) next.delete(b); }
+      else next.add(b);
+      return next;
+    });
+  }
+
+  return (
+    <div className="glass-card p-5 space-y-3">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Benchmark Progress
+          </div>
+          <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+            Frontier line shows the best-ever score at each point in time — illustrating how fast AI has improved.
+          </p>
+        </div>
+        {/* Legend / toggles */}
+        <div className="flex gap-2 flex-wrap">
+          {(Object.keys(BENCHMARK_META) as BenchKey[]).map((b) => {
+            const { label, color } = BENCHMARK_META[b];
+            const active = activeBenches.has(b);
+            return (
+              <button
+                key={b}
+                onClick={() => toggleBench(b)}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium border transition-all ${
+                  active
+                    ? "border-transparent text-foreground"
+                    : "border-white/10 text-muted-foreground/40"
+                }`}
+                style={active ? { background: `${color}20`, borderColor: `${color}40`, color } : {}}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ background: active ? color : "#ffffff20" }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SVG Chart */}
+      <div className="relative w-full overflow-x-auto">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full"
+          style={{ minWidth: 320 }}
+          onMouseLeave={() => setTooltip(null)}
+        >
+          {/* Grid lines */}
+          {[0, 25, 50, 75, 100].map((pct) => (
+            <g key={pct}>
+              <line
+                x1={PAD.left} y1={yOf(pct)}
+                x2={PAD.left + chartW} y2={yOf(pct)}
+                stroke="rgba(255,255,255,0.05)"
+                strokeWidth={1}
+              />
+              <text
+                x={PAD.left - 4} y={yOf(pct) + 3}
+                textAnchor="end"
+                fontSize={9}
+                fill="rgba(255,255,255,0.25)"
+              >
+                {pct}%
+              </text>
+            </g>
+          ))}
+
+          {/* Year ticks */}
+          {years.map((y) => {
+            const x = xOf(`${y}-01-01`);
+            if (x < PAD.left || x > PAD.left + chartW) return null;
+            return (
+              <g key={y}>
+                <line
+                  x1={x} y1={PAD.top}
+                  x2={x} y2={PAD.top + chartH}
+                  stroke="rgba(255,255,255,0.06)"
+                  strokeWidth={1}
+                  strokeDasharray="3 3"
+                />
+                <text
+                  x={x} y={H - 8}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="rgba(255,255,255,0.3)"
+                >
+                  {y}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Per-benchmark: frontier line + scatter dots */}
+          {(Object.keys(BENCHMARK_META) as BenchKey[]).map((bench) => {
+            if (!activeBenches.has(bench)) return null;
+            const { color } = BENCHMARK_META[bench];
+            const points = series[bench];
+            const path = frontierPath(points);
+            return (
+              <g key={bench}>
+                {/* Frontier line */}
+                <path
+                  d={path}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={1.5}
+                  strokeOpacity={0.5}
+                  strokeDasharray="4 2"
+                />
+                {/* Scatter dots */}
+                {points.map(({ model, value }) => {
+                  const cx = xOf(model.releaseDate);
+                  const cy = yOf(value);
+                  const isHovered = tooltip?.model.id === model.id && tooltip?.bench === bench;
+                  return (
+                    <circle
+                      key={model.id}
+                      cx={cx}
+                      cy={cy}
+                      r={isHovered ? 5 : 3.5}
+                      fill={color}
+                      fillOpacity={isHovered ? 1 : 0.75}
+                      stroke={isHovered ? "#fff" : "rgba(0,0,0,0.4)"}
+                      strokeWidth={isHovered ? 1.5 : 1}
+                      style={{ cursor: "pointer", transition: "r 0.1s" }}
+                      onMouseEnter={(e) => {
+                        const svg = svgRef.current;
+                        if (!svg) return;
+                        const rect = svg.getBoundingClientRect();
+                        const scaleX = rect.width / W;
+                        const scaleY = rect.height / H;
+                        setTooltip({
+                          x: cx * scaleX + rect.left - (rect.left + rect.width / 2 > window.innerWidth / 2 ? 160 : 0),
+                          y: cy * scaleY + rect.top,
+                          model,
+                          bench,
+                          value,
+                        });
+                      }}
+                    />
+                  );
+                })}
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Tooltip (portal-style, positioned relative to viewport) */}
+        {tooltip && (
+          <div
+            className="fixed z-50 pointer-events-none px-2.5 py-2 rounded-lg text-xs shadow-xl border border-white/10 bg-background/95 backdrop-blur-sm"
+            style={{ left: tooltip.x + 12, top: tooltip.y - 40, minWidth: 140 }}
+          >
+            <div
+              className="font-semibold text-foreground"
+              style={{ color: BENCHMARK_META[tooltip.bench].color }}
+            >
+              {BENCHMARK_META[tooltip.bench].label}: {tooltip.value}%
+            </div>
+            <div className="text-muted-foreground mt-0.5">{tooltip.model.name}</div>
+            <div className="text-muted-foreground/60 text-[10px]">
+              {new Date(tooltip.model.releaseDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Benchmark descriptions */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-white/[0.04]">
+        {(Object.keys(BENCHMARK_META) as BenchKey[]).map((b) => {
+          const { label, color, desc } = BENCHMARK_META[b];
+          return (
+            <div key={b} className="flex gap-2 items-start">
+              <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: color }} />
+              <div className="text-[10px] text-muted-foreground">
+                <span className="font-medium" style={{ color }}>{label}</span>
+                {" — "}{desc}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Main ModelsTab ──────────────────────────────────────────────────────────
 
 export interface ModelsTabProps {
   highlightModelId?: string | null;
@@ -246,24 +540,25 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [mounted, setMounted] = useState(false);
-  const [timelineValue, setTimelineValue] = useState(100); // 0–100 percentage
+  const [timelineValue, setTimelineValue] = useState(100);
   const [groupByCompany, setGroupByCompany] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Auto-clear highlight after 2.5s
   useEffect(() => {
     if (!highlightModelId) return;
     const t = setTimeout(() => onHighlightClear?.(), 2500);
     return () => clearTimeout(t);
   }, [highlightModelId, onHighlightClear]);
 
+  const startMs = TIMELINE_START.getTime();
+  const endMs = useMemo(() => mounted ? Date.now() : new Date("2026-04-06").getTime(), [mounted]);
+  const totalMs = endMs - startMs;
+
   const timelineDate = useMemo(() => {
     if (!mounted) return new Date();
-    const start = FRONTIER_FIRST_DATE.getTime();
-    const end = Date.now();
-    return new Date(start + (timelineValue / 100) * (end - start));
-  }, [timelineValue, mounted]);
+    return new Date(startMs + (timelineValue / 100) * totalMs);
+  }, [timelineValue, mounted, startMs, totalMs]);
 
   const filtered = useMemo(() => {
     return AI_MODELS.filter((m) => {
@@ -277,19 +572,14 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
     });
   }, [typeFilter, activeTag, search]);
 
-  // Group filtered models by provider
   const groupedModels = useMemo(() => {
     const map = new Map<string, { color: string; models: AIModel[] }>();
     for (const m of filtered) {
-      if (!map.has(m.provider)) {
-        map.set(m.provider, { color: m.providerColor, models: [] });
-      }
+      if (!map.has(m.provider)) map.set(m.provider, { color: m.providerColor, models: [] });
       map.get(m.provider)!.models.push(m);
     }
-    // Sort providers by preferred order, then alphabetically
     return [...map.entries()].sort(([a], [b]) => {
-      const ai = PROVIDER_ORDER.indexOf(a);
-      const bi = PROVIDER_ORDER.indexOf(b);
+      const ai = PROVIDER_ORDER.indexOf(a), bi = PROVIDER_ORDER.indexOf(b);
       if (ai !== -1 && bi !== -1) return ai - bi;
       if (ai !== -1) return -1;
       if (bi !== -1) return 1;
@@ -297,11 +587,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
     });
   }, [filtered]);
 
-  // Timeline year markers
-  const years = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
-  const startMs = FRONTIER_FIRST_DATE.getTime();
-  const endMs = mounted ? Date.now() : new Date("2026-04-05").getTime();
-  const totalMs = endMs - startMs;
+  const years = [2023, 2024, 2025, 2026];
 
   function yearToPercent(year: number) {
     return ((new Date(`${year}-01-01`).getTime() - startMs) / totalMs) * 100;
@@ -317,9 +603,11 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
         </p>
       </div>
 
+      {/* Benchmark Trends Chart */}
+      <BenchmarkTrendsChart />
+
       {/* Controls */}
       <div className="flex flex-col gap-3">
-        {/* Type toggle + view toggle + search */}
         <div className="flex flex-wrap items-center gap-2">
           {(["all", "frontier", "open-source"] as const).map((t) => (
             <button
@@ -335,7 +623,6 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
             </button>
           ))}
 
-          {/* View mode toggle */}
           <div className="flex items-center rounded-lg bg-white/5 p-0.5 ml-1">
             <button
               onClick={() => setGroupByCompany(false)}
@@ -376,7 +663,6 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
           </div>
         </div>
 
-        {/* Quick filter tags */}
         <div className="flex flex-wrap gap-1.5">
           <span className="text-xs text-muted-foreground self-center mr-1">Quick filter:</span>
           {QUICK_FILTERS.map(({ label, tag }) => (
@@ -399,7 +685,6 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm">No models match the current filters.</div>
       ) : groupByCompany ? (
-        /* ── Grouped by company ── */
         <div className="space-y-3">
           {groupedModels.map(([provider, { color, models }]) => (
             <ProviderSection
@@ -414,7 +699,6 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
           ))}
         </div>
       ) : (
-        /* ── Flat grid ── */
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((model) => (
             <motion.div
@@ -433,7 +717,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
         </div>
       )}
 
-      {/* Timeline */}
+      {/* Timeline slider */}
       <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -449,9 +733,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
           </div>
         </div>
 
-        {/* Slider track */}
         <div className="relative pt-2 pb-5">
-          {/* Year tick marks */}
           <div className="relative h-4 mb-2">
             {years.map((y) => {
               const pct = yearToPercent(y);
@@ -468,13 +750,9 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
             })}
           </div>
 
-          {/* Model dots on track */}
           <div className="relative h-2 bg-white/5 rounded-full mb-2">
-            <div
-              className="absolute h-full bg-accent/30 rounded-full"
-              style={{ width: `${timelineValue}%` }}
-            />
-            {AI_MODELS.map((m) => {
+            <div className="absolute h-full bg-accent/30 rounded-full" style={{ width: `${timelineValue}%` }} />
+            {AI_MODELS.filter(m => new Date(m.releaseDate) >= TIMELINE_START).map((m) => {
               const pct = ((new Date(m.releaseDate).getTime() - startMs) / totalMs) * 100;
               if (pct < 0 || pct > 100) return null;
               const color = m.type === "frontier" ? "#3b82f6" : "#22c55e";
@@ -508,17 +786,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Open Source
           </span>
-          <span className="ml-auto">Drag slider to explore model evolution →</span>
-        </div>
-      </div>
-
-      {/* Benchmark glossary */}
-      <div className="glass-card p-4">
-        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Benchmark Guide</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
-          <div><span className="text-foreground font-medium">MMLU</span> — Massive Multitask Language Understanding. 57 academic subjects. General knowledge proxy.</div>
-          <div><span className="text-foreground font-medium">GPQA Diamond</span> — Graduate-level expert questions in biology, chemistry, physics. Hard reasoning test.</div>
-          <div><span className="text-foreground font-medium">SWE-Bench</span> — Real GitHub issues. Model must write code that passes tests. Best coding proxy.</div>
+          <span className="ml-auto">Drag to explore model evolution →</span>
         </div>
       </div>
     </div>

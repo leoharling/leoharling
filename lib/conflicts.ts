@@ -369,26 +369,30 @@ export const conflicts: Conflict[] = [
     countryCodes: ["376", "275", "422", "760", "364", "887", "368"], // Israel, Palestine, Lebanon, Syria, Iran, Yemen, Iraq
     kpis: [
       {
-        label: "Deaths in Gaza",
-        value: "75,000+",
-        subtext: "Gaza Health Ministry",
+        label: "Regional Deaths",
+        value: "85,000+",
+        subtext: "Gaza 75K · Lebanon 4K · Yemen · Iran",
       },
       {
-        label: "Israeli Deaths (incl. Oct 7)",
+        label: "Displaced",
+        value: "2.1M+",
+        subtext: "Gaza 1.9M · Lebanon 200K+",
+      },
+      {
+        label: "Active War Fronts",
+        value: "5",
+        subtext: "Gaza · Lebanon · Iran · Yemen · West Bank",
+      },
+      {
+        label: "Iran War Deaths",
         value: "2,000+",
-        subtext: "Israeli government",
+        subtext: "US-Israel strikes on nuclear & military sites, Feb 2026",
       },
       {
-        label: "Displaced in Gaza",
-        value: "1.9M",
-        subtext: "~85% of population",
+        label: "Hostages Returned",
+        value: "168 / 251",
+        subtext: "All living released; final remains recovered Jan 2026",
       },
-      {
-        label: "Lebanon Deaths",
-        value: "4,000+",
-        subtext: "Lebanese Health Ministry",
-      },
-      { label: "Hostages Taken", value: "251", subtext: "Oct 7, 2023" },
     ],
     // Gaza uses external GeoJSON (public/geojson/gaza.geojson); Lebanon below is hand-drawn
     controlledAreas: [

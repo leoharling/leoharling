@@ -130,7 +130,7 @@ export default function LaunchModal({
           <div className="relative h-48 sm:h-auto sm:w-2/5 shrink-0">
             {launch.image?.image_url ? (
               <div
-                className="h-full min-h-[280px] bg-cover bg-center"
+                className="h-full sm:min-h-[280px] bg-cover bg-center"
                 style={{
                   backgroundImage: `url(${launch.image.image_url})`,
                 }}
@@ -139,7 +139,7 @@ export default function LaunchModal({
                 <div className="h-full w-full bg-gradient-to-t from-card to-transparent sm:hidden" />
               </div>
             ) : (
-              <div className="flex h-full min-h-[280px] items-center justify-center bg-white/[0.02]">
+              <div className="flex h-full sm:min-h-[280px] items-center justify-center bg-white/[0.02]">
                 <Rocket size={40} className="text-muted-foreground/20" />
               </div>
             )}
@@ -183,7 +183,7 @@ export default function LaunchModal({
             )}
 
             {/* Key info grid */}
-            <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3">
+            <div className="mt-5 grid grid-cols-1 gap-y-3 sm:grid-cols-2 sm:gap-x-6">
               <Stat
                 icon={<Rocket size={13} />}
                 label="Vehicle"

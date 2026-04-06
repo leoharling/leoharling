@@ -55,36 +55,44 @@ export async function GET(request: NextRequest) {
 
   // Upcoming: fetch from API on cache miss
   if (type === "upcoming") {
-    const res: Response = await fetch(
-      `${SPACE_DEVS}/upcoming/?limit=50&mode=detailed`,
-      { headers: { "User-Agent": "OrbitIntel/1.0 (leoharling.com)" } }
-    );
+    try {
+      const res: Response = await fetch(
+        `${SPACE_DEVS}/upcoming/?limit=50&mode=detailed`,
+        { headers: { "User-Agent": "OrbitIntel/1.0 (leoharling.com)" } }
+      );
 
-    if (res.status === 429) {
+      if (res.status === 429) {
+        return NextResponse.json(
+          { error: "API rate limit reached. Data will be available after the next sync." },
+          { status: 429 }
+        );
+      }
+      if (!res.ok) {
+        return NextResponse.json(
+          { error: `Failed to fetch launches: HTTP ${res.status}` },
+          { status: 502 }
+        );
+      }
+
+      const json: { results?: unknown[] } = await res.json();
+      const results = json.results || [];
+
+      await supabase.from("launch_cache").upsert(
+        { cache_key: "upcoming", data: results, updated_at: new Date().toISOString() },
+        { onConflict: "cache_key" }
+      );
+
       return NextResponse.json(
-        { error: "API rate limit reached. Data will be available after the next sync." },
-        { status: 429 }
+        { results, cached: false },
+        { headers: CACHE_HEADERS }
+      );
+    } catch (error) {
+      console.error("Error fetching upcoming launches:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch launch data" },
+        { status: 500 }
       );
     }
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `Failed to fetch launches: HTTP ${res.status}` },
-        { status: 502 }
-      );
-    }
-
-    const json: { results?: unknown[] } = await res.json();
-    const results = json.results || [];
-
-    await supabase.from("launch_cache").upsert(
-      { cache_key: "upcoming", data: results, updated_at: new Date().toISOString() },
-      { onConflict: "cache_key" }
-    );
-
-    return NextResponse.json(
-      { results, cached: false },
-      { headers: CACHE_HEADERS }
-    );
   }
 
   // Past year: fetch from Space Devs API on cache miss, then cache permanently

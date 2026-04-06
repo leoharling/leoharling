@@ -44,6 +44,21 @@ function frontLineToGeoJSON(coords: [number, number][]): FeatureCollection {
   };
 }
 
+/** Extract polygon outer rings as LineStrings — used to draw frontline from territory snapshot */
+function frontLineFromPolygons(geo: FeatureCollection): FeatureCollection {
+  const lines: FeatureCollection["features"] = [];
+  for (const f of geo.features) {
+    if (f.geometry.type === "Polygon") {
+      lines.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: f.geometry.coordinates[0] } });
+    } else if (f.geometry.type === "MultiPolygon") {
+      for (const poly of f.geometry.coordinates) {
+        lines.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: poly[0] } });
+      }
+    }
+  }
+  return { type: "FeatureCollection", features: lines };
+}
+
 function controlledAreasToGeoJSON(areas: Conflict["controlledAreas"]): FeatureCollection {
   if (!areas?.length) return { type: "FeatureCollection", features: [] };
   return {
@@ -261,13 +276,18 @@ function FlyToController({ conflictCenter, conflictZoom, focusLocation, onFocuse
     }
     prevConflictCenter.current = conflictCenter;
 
+    // Drop minZoom during flight so the arc doesn't get clamped and wiggle at its peak
+    const ml = map.getMap();
+    ml.setMinZoom(0);
     map.flyTo({
       center: [conflictCenter[1], conflictCenter[0]],
       zoom: conflictZoom,
-      speed: 0.8,   // slow enough to stay smooth over intercontinental distances
-      curve: 1.5,    // moderate arc — visible zoom-out without over-zooming
+      speed: 0.8,
+      curve: 1.5,
       essential: true,
     });
+    const restoreMinZoom = () => { ml.setMinZoom(3); ml.off("moveend", restoreMinZoom); };
+    ml.on("moveend", restoreMinZoom);
   }, [conflictCenter, conflictZoom, map]);
 
   // Fly to focused location, then clear it so the user can freely navigate
@@ -425,6 +445,14 @@ export default function ConflictMap({
     return controlledAreasData;
   }, [conflict.id, externalGeoJSON, controlledAreasData, liveGeoJSON, selectedTime, territorySnapshots]);
 
+  // In historical mode, derive frontline from the territory polygon border; otherwise use static
+  const displayFrontLineData = useMemo(() => {
+    if (selectedTime != null && territorySnapshots && territorySnapshots.length > 0) {
+      return frontLineFromPolygons(occupiedTerritoryData);
+    }
+    return frontLineData;
+  }, [selectedTime, territorySnapshots, occupiedTerritoryData, frontLineData]);
+
   // Filter events by selected time
   const filteredRecentEvents = useMemo(() => {
     if (selectedTime == null) return conflict.recentEvents || [];
@@ -533,8 +561,8 @@ export default function ConflictMap({
         )}
 
         {/* ── 3. Front line ── */}
-        {frontLineData && layerVisibility.frontline && (
-          <Source id="frontline" type="geojson" data={frontLineData}>
+        {displayFrontLineData && layerVisibility.frontline && (
+          <Source id="frontline" type="geojson" data={displayFrontLineData}>
             <Layer id="frontline-glow" type="line" paint={{ "line-color": conflict.color, "line-width": 10, "line-opacity": 0.08, "line-blur": 4 }} layout={{ "line-cap": "round", "line-join": "round" }} />
             <Layer id="frontline-white" type="line" paint={{ "line-color": "#ffffff", "line-width": 3, "line-opacity": 0.15 }} layout={{ "line-cap": "round", "line-join": "round" }} />
             <Layer id="frontline-main" type="line" paint={{ "line-color": conflict.color, "line-width": 2, "line-opacity": 0.9, "line-dasharray": [4, 3] }} layout={{ "line-cap": "round", "line-join": "round" }} />

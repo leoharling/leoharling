@@ -71,6 +71,17 @@ export default function ConflictTimeline({
     return pctFromTimestamp(selectedTime);
   }, [selectedTime, pctFromTimestamp]);
 
+  // Phase that contains the current selectedTime
+  const activePhase = useMemo(() => {
+    if (selectedTime == null) return null;
+    for (const p of phases) {
+      const start = toTimestamp(p.startDate);
+      const end = p.endDate ? toTimestamp(p.endDate) : Infinity;
+      if (selectedTime >= start && selectedTime <= end) return p;
+    }
+    return null;
+  }, [phases, selectedTime]);
+
   // Milestone that's currently "active" — during drag: nearest within NEAR_PCT; at rest: nearest within SNAP_PCT
   const activeMilestone = useMemo(() => {
     if (dragging) return nearMilestone;
@@ -326,9 +337,9 @@ export default function ConflictTimeline({
         }}
       >
         <div style={{ overflow: "hidden" }}>
-          {/* Fixed minHeight so milestone card ↔ date text swap never shifts the map */}
-          <div className="mt-2" style={{ minHeight: 96 }}>
+          <div className="mt-2">
             {!isAtNow && (activeMilestone ? (
+              /* ── Milestone event card ── */
               <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -338,9 +349,6 @@ export default function ConflictTimeline({
                     <span className="text-white/15 text-[10px]">·</span>
                     <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
                       {activeMilestone.category}
-                    </span>
-                    <span className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[9px] text-muted-foreground/60">
-                      {activeMilestone.phase}
                     </span>
                   </div>
                   <button
@@ -353,10 +361,47 @@ export default function ConflictTimeline({
                 <p className="mt-2 text-sm font-semibold">{activeMilestone.title}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{activeMilestone.description}</p>
               </div>
+            ) : activePhase ? (
+              /* ── Phase context card — visually muted to distinguish from events ── */
+              <div
+                className="rounded-lg border border-white/[0.04] px-4 py-3"
+                style={{
+                  background: `${ESCALATION_COLORS[activePhase.escalationLevel]}06`,
+                  borderLeft: `2px solid ${ESCALATION_COLORS[activePhase.escalationLevel]}35`,
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                      War phase
+                    </span>
+                    <span className="text-white/15 text-[9px]">·</span>
+                    <span className="text-[10px] font-medium text-muted-foreground/80">
+                      {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    <span className="text-white/10 text-[9px]">·</span>
+                    <span className="text-[10px] text-muted-foreground/40">
+                      {new Date(activePhase.startDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                      {activePhase.endDate
+                        ? ` – ${new Date(activePhase.endDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
+                        : " – ongoing"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => onTimeChange?.(null)}
+                    className="shrink-0 text-[10px] text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+                  >
+                    Return to Now
+                  </button>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-white/60">{activePhase.label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground/70 leading-relaxed">{activePhase.description}</p>
+              </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground">
-                  Viewing: {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              /* ── Fallback: simple date when between phases ── */
+              <div className="flex items-center gap-2 py-1">
+                <span className="text-[10px] text-muted-foreground/50">
+                  {new Date(selectedTime!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </span>
                 <button
                   onClick={() => onTimeChange?.(null)}

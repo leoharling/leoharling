@@ -717,8 +717,8 @@ export function PlanetDetailView({ planet, onClose }: { planet: Planet; onClose:
         <motion.div
           className="relative flex items-center justify-center mx-auto"
           style={{ width: Math.min(displaySize + 250, 500), height: Math.min(displaySize + 250, 500) }}
-          initial={{ scale: 0.2, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
         >
           <PlanetPreview3D

@@ -28,7 +28,7 @@
 *.pem
 
 # claude code local settings (contains permissions, not for sharing)
-.claude/settings.local.json
+.claude/
 
 # playwright mcp screenshots
 .playwright-mcp/

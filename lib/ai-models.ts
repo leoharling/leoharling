@@ -23,6 +23,23 @@ export interface AIModel {
 }
 
 export const AI_MODELS: AIModel[] = [
+  // ── OpenAI (origin) ──
+  {
+    id: "gpt-35-turbo",
+    name: "ChatGPT (GPT-3.5)",
+    provider: "OpenAI",
+    providerColor: "#10b981",
+    type: "frontier",
+    releaseDate: "2022-11-30",
+    mmlu: 70.0,
+    gpqa: 28.0,
+    contextK: 16,
+    costInput: 0.50,
+    costOutput: 1.50,
+    modalities: ["text", "code"],
+    tags: ["Frontier"],
+    notes: "Sparked the public AI era; first widely-adopted conversational LLM",
+  },
   // ── Anthropic ──
   {
     id: "claude-opus-46",

@@ -604,7 +604,9 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
   }, [selectedLaunch, selectedLocation, trajectoryTemplate]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    <div className="relative h-full w-full overflow-x-hidden max-md:flex max-md:flex-col">
+      {/* Canvas area — takes all remaining space above panel on mobile */}
+      <div className="relative h-full w-full flex-1 min-h-0">
       <Canvas
         camera={{ position: [0, 2, 5], fov: 45 }}
         dpr={[1, 2]}
@@ -688,10 +690,11 @@ export default function SpaceportGlobe({ launches }: SpaceportGlobeProps) {
           Loading launch data...
         </p>
       )}
+      </div>
 
       {/* Side panel for launches at selected location */}
       {selectedLocation && (
-        <div className="absolute top-4 right-4 bottom-4 w-80 overflow-y-auto rounded-xl bg-card/90 backdrop-blur-md border border-white/10 p-4 space-y-3 max-md:w-full max-md:right-0 max-md:left-0 max-md:top-auto max-md:bottom-0 max-md:h-[50vh] max-md:rounded-b-none">
+        <div className="absolute top-4 right-4 bottom-4 w-80 overflow-y-auto rounded-xl bg-card/90 backdrop-blur-md border border-white/10 p-4 space-y-3 max-md:static max-md:w-full max-md:shrink-0 max-md:h-[50vh] max-md:rounded-t-xl max-md:rounded-b-none max-md:border-l-0 max-md:border-r-0 max-md:border-b-0">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold">
