@@ -18,6 +18,15 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export async function POST(request: NextRequest) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
@@ -64,10 +73,10 @@ export async function POST(request: NextRequest) {
             subject: `New Contact: ${name}`,
             html: `
               <h2>New message from your website</h2>
-              <p><strong>Name:</strong> ${name}</p>
-              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+              <p><strong>Email:</strong> ${escapeHtml(email)}</p>
               <p><strong>Message:</strong></p>
-              <p>${message}</p>
+              <p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>
             `,
           }),
         });

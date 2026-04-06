@@ -8,24 +8,17 @@ export async function POST(request: NextRequest) {
 
     // Verify admin password
     const password = formData.get("password") as string;
-    console.log("[upload] Password provided:", !!password);
-    console.log("[upload] Password matches:", password === process.env.ADMIN_PASSWORD);
     if (password !== process.env.ADMIN_PASSWORD) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const files = formData.getAll("files") as File[];
     const category = (formData.get("category") as string) || "";
-    console.log("[upload] Files received:", files.length, "Category:", category);
 
     // Auth-only check (no files = just validating password)
     if (!files.length || !files[0].size) {
       return NextResponse.json({ authenticated: true });
     }
-
-    // Log Supabase config
-    console.log("[upload] Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log("[upload] Supabase key starts with:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(0, 10) + "...");
 
     const results: { success: boolean; title: string; error?: string }[] = [];
 
@@ -107,7 +100,6 @@ export async function POST(request: NextRequest) {
         const fileName = `${timestamp}-${rand}.${ext}`;
 
         // Upload to Supabase Storage
-        console.log(`[upload] Uploading "${file.name}" (${(buffer.length / 1024).toFixed(0)}KB) as "${fileName}" to bucket "photos"...`);
         const { data: storageData, error: uploadError } = await supabase.storage
           .from("photos")
           .upload(fileName, buffer, {
@@ -116,7 +108,7 @@ export async function POST(request: NextRequest) {
           });
 
         if (uploadError) {
-          console.error(`[upload] Storage error for "${file.name}":`, JSON.stringify(uploadError));
+          console.error(`[upload] Storage error for "${file.name}":`, uploadError.message);
           results.push({
             success: false,
             title: file.name,
@@ -124,13 +116,12 @@ export async function POST(request: NextRequest) {
           });
           continue;
         }
-        console.log(`[upload] Storage success for "${file.name}":`, JSON.stringify(storageData));
+        void storageData;
 
         // Get public URL
         const {
           data: { publicUrl },
         } = supabase.storage.from("photos").getPublicUrl(fileName);
-        console.log(`[upload] Public URL:`, publicUrl);
 
         // Insert into photos table
         const insertPayload = {
@@ -143,12 +134,10 @@ export async function POST(request: NextRequest) {
           location_name: locationName,
           taken_at: takenAt,
         };
-        console.log(`[upload] Inserting into DB:`, JSON.stringify(insertPayload));
-
-        const { data: dbData, error: dbError } = await supabase.from("photos").insert([insertPayload]).select();
+        const { error: dbError } = await supabase.from("photos").insert([insertPayload]).select();
 
         if (dbError) {
-          console.error(`[upload] DB error for "${file.name}":`, JSON.stringify(dbError));
+          console.error(`[upload] DB error for "${file.name}":`, dbError.message);
           results.push({
             success: false,
             title: file.name,
@@ -156,7 +145,6 @@ export async function POST(request: NextRequest) {
           });
           continue;
         }
-        console.log(`[upload] DB success:`, JSON.stringify(dbData));
 
         results.push({ success: true, title: file.name });
       } catch (err) {
