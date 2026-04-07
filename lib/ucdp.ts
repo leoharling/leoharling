@@ -13,7 +13,7 @@ const UCDP_BASE = "https://ucdpapi.pcr.uu.se/api";
 const GED_VERSION = "25.1";
 const GED_CANDIDATE_VERSION = "25.01.25.12";
 // All monthly releases to try — add new versions here as UCDP publishes them
-const GED_MONTHLY_VERSIONS = ["26.0.1", "26.0.2", "26.0.3"];
+const GED_MONTHLY_VERSIONS = ["26.0.1", "26.0.2", "26.0.3", "26.0.4", "26.0.5", "26.0.6", "26.0.7", "26.0.8", "26.0.9", "26.0.10", "26.0.11", "26.0.12"];
 
 /** Gleditsch-Ward country codes per conflict */
 export const UCDP_CONFLICT_COUNTRIES: Record<string, {

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Search, X, ChevronDown, LayoutGrid, Building2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { Search, X, LayoutGrid, Building2 } from "lucide-react";
 import { AI_MODELS, MODELS_LAST_UPDATED, type AIModel, type ModelType } from "@/lib/ai-models";
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -42,8 +42,8 @@ const PROVIDER_ORDER = [
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function fmtCost(n: number): string {
-  if (n === 0) return "Self-hosted";
-  if (n < 1) return `$${n.toFixed(2)}`;
+  if (n === 0) return "Free";
+  if (n < 1) return `$${n}`;
   return `$${n}`;
 }
 
@@ -76,16 +76,76 @@ function BenchmarkBar({ bench, value }: { bench: BenchKey; value?: number }) {
   );
 }
 
-// ── ModelCard ──────────────────────────────────────────────────────────────
+// ── ModelMiniCard — compact card for column view ────────────────────────────
+
+interface ModelMiniCardProps {
+  model: AIModel;
+  highlighted: boolean;
+  faded: boolean;
+}
+
+function ModelMiniCard({ model, highlighted, faded }: ModelMiniCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (highlighted && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [highlighted]);
+
+  const displayName = model.variantLabel || model.name;
+
+  return (
+    <div
+      ref={cardRef}
+      className={`w-full p-2.5 flex flex-col gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.03] transition-all duration-200 hover:border-white/[0.18] hover:bg-white/[0.06] cursor-default select-none ${
+        highlighted ? "ring-1 ring-accent/60 bg-accent/5 border-accent/30" : ""
+      } ${faded ? "opacity-25" : ""}`}
+    >
+      {/* Type badge + modality dots */}
+      <div className="flex items-center justify-between gap-1">
+        <span className={`text-[8px] font-bold uppercase tracking-wide px-1 py-0.5 rounded ${
+          model.type === "frontier" ? "bg-accent/15 text-accent" : "bg-emerald-500/10 text-emerald-400"
+        }`}>
+          {model.type === "frontier" ? "F" : "OS"}
+        </span>
+        <div className="flex gap-0.5 shrink-0">
+          {model.modalities.slice(0, 5).map(m => (
+            <span key={m} className="w-1.5 h-1.5 rounded-full" style={{ background: MODALITY_COLORS[m] }} />
+          ))}
+        </div>
+      </div>
+
+      {/* Variant name */}
+      <div className="text-[11px] font-bold text-foreground leading-tight line-clamp-2 flex-1">
+        {displayName}
+      </div>
+
+      {/* Date */}
+      <div className="text-[9px] text-muted-foreground/50">
+        {new Date(model.releaseDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+      </div>
+
+      {/* Context + cost */}
+      <div className="flex items-center justify-between text-[9px] pt-1 border-t border-white/[0.04]">
+        <span className="text-muted-foreground/70 font-medium">{fmtContext(model.contextK)}</span>
+        <span className="text-muted-foreground/70">
+          {model.costInput > 0 ? `$${model.costInput}/M` : "Free"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── ModelCard — full card for grid view ────────────────────────────────────
 
 interface ModelCardProps {
   model: AIModel;
   highlighted: boolean;
   faded: boolean;
-  grouped?: boolean;
 }
 
-function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
+function ModelCard({ model, highlighted, faded }: ModelCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (highlighted && cardRef.current) {
@@ -106,14 +166,12 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            {!grouped && (
-              <span
-                className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                style={{ background: `${model.providerColor}20`, color: model.providerColor }}
-              >
-                {model.provider}
-              </span>
-            )}
+            <span
+              className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+              style={{ background: `${model.providerColor}20`, color: model.providerColor }}
+            >
+              {model.provider}
+            </span>
             <span className={`text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
               model.type === "frontier"
                 ? "bg-accent/15 text-accent"
@@ -129,12 +187,7 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
         </div>
         <div className="flex gap-1 shrink-0 mt-1">
           {model.modalities.map((m) => (
-            <span
-              key={m}
-              title={m}
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: MODALITY_COLORS[m] }}
-            />
+            <span key={m} title={m} className="w-2 h-2 rounded-full shrink-0" style={{ background: MODALITY_COLORS[m] }} />
           ))}
         </div>
       </div>
@@ -177,10 +230,7 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
       {/* Tags */}
       <div className="flex flex-wrap gap-1">
         {model.tags.map((tag) => (
-          <span
-            key={tag}
-            className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground"
-          >
+          <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground">
             {tag}
           </span>
         ))}
@@ -193,9 +243,9 @@ function ModelCard({ model, highlighted, faded, grouped }: ModelCardProps) {
   );
 }
 
-// ── ProviderSection (grouped view) ─────────────────────────────────────────
+// ── CompanyColumn ──────────────────────────────────────────────────────────
 
-interface ProviderSectionProps {
+interface CompanyColumnProps {
   provider: string;
   color: string;
   models: AIModel[];
@@ -204,55 +254,113 @@ interface ProviderSectionProps {
   mounted: boolean;
 }
 
-function ProviderSection({ provider, color, models, highlightModelId, timelineDate, mounted }: ProviderSectionProps) {
-  const [collapsed, setCollapsed] = useState(false);
+function CompanyColumn({
+  provider,
+  color,
+  models,
+  highlightModelId,
+  timelineDate,
+  mounted,
+}: CompanyColumnProps) {
+  // Group by family, sort families newest-first
+  const familyGroups = useMemo(() => {
+    const map = new Map<string, AIModel[]>();
+    for (const m of models) {
+      if (!map.has(m.family)) map.set(m.family, []);
+      map.get(m.family)!.push(m);
+    }
+    return [...map.entries()]
+      .map(([family, fModels]) => ({
+        family,
+        models: fModels.sort(
+          (a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime()
+        ),
+        latestMs: Math.max(...fModels.map(m => new Date(m.releaseDate).getTime())),
+      }))
+      .sort((a, b) => b.latestMs - a.latestMs);
+  }, [models]);
+
+  const latestGroup  = familyGroups[0];
+  const olderGroups  = familyGroups.slice(1);
+
   return (
-    <div className="glass-card overflow-hidden">
-      <button
-        onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors"
+    <div className="w-[280px] shrink-0 flex flex-col">
+      {/* Company header */}
+      <div
+        className="mb-3 pb-2.5 flex items-center gap-2.5"
+        style={{ borderBottom: `1px solid ${color}28` }}
       >
-        <span className="w-3 h-3 rounded-full shrink-0" style={{ background: color }} />
-        <span className="font-semibold text-foreground text-sm">{provider}</span>
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+        <span className="font-bold text-sm text-foreground">{provider}</span>
         <span
-          className="text-[10px] font-medium px-2 py-0.5 rounded-full ml-1"
-          style={{ background: `${color}20`, color }}
+          className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-auto"
+          style={{ background: `${color}18`, color }}
         >
-          {models.length} {models.length === 1 ? "model" : "models"}
+          {models.length}
         </span>
-        <ChevronDown
-          size={14}
-          className={`ml-auto text-muted-foreground transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
-        />
-      </button>
-      <AnimatePresence initial={false}>
-        {!collapsed && (
-          <motion.div
-            key="content"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div
-              className="px-4 pb-4 pt-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-              style={{ borderTop: `1px solid ${color}18` }}
+      </div>
+
+      {/* Latest family — highlighted box */}
+      {latestGroup && (
+        <div
+          className="mb-4 p-3 rounded-xl"
+          style={{ background: `${color}08`, border: `1px solid ${color}22` }}
+        >
+          <div className="mb-2.5">
+            <span
+              className="text-[9px] font-bold uppercase tracking-widest block"
+              style={{ color }}
             >
-              {models.map((model) => (
-                <motion.div key={model.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }}>
-                  <ModelCard
-                    model={model}
-                    highlighted={highlightModelId === model.id}
-                    faded={mounted && new Date(model.releaseDate) > timelineDate}
-                    grouped
+              Latest
+            </span>
+            <span className="text-[10px] font-semibold text-foreground/55">
+              {latestGroup.family}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {latestGroup.models.map(m => (
+              <ModelMiniCard
+                key={m.id}
+                model={m}
+                highlighted={highlightModelId === m.id}
+                faded={mounted && new Date(m.releaseDate) > timelineDate}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Older families */}
+      {olderGroups.length > 0 && (
+        <div className="space-y-3.5">
+          {/* "Older" divider */}
+          <div className="flex items-center gap-2">
+            <span className="flex-1 h-px" style={{ background: `${color}18` }} />
+            <span className="text-[9px] uppercase tracking-widest font-medium" style={{ color: `${color}55` }}>
+              Older
+            </span>
+            <span className="flex-1 h-px" style={{ background: `${color}18` }} />
+          </div>
+
+          {olderGroups.map(({ family, models: fModels }) => (
+            <div key={family}>
+              <div className="text-[10px] font-medium text-muted-foreground/60 mb-1.5 pl-0.5">
+                {family}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {fModels.map(m => (
+                  <ModelMiniCard
+                    key={m.id}
+                    model={m}
+                    highlighted={highlightModelId === m.id}
+                    faded={mounted && new Date(m.releaseDate) > timelineDate}
                   />
-                </motion.div>
-              ))}
+                ))}
+              </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -281,18 +389,16 @@ function BenchmarkTrendsChart() {
   const chartH = H - PAD.top - PAD.bottom;
 
   const startMs = TIMELINE_START.getTime();
-  const endMs = new Date("2026-04-06").getTime();
+  const endMs   = new Date("2026-04-07").getTime();
   const totalMs = endMs - startMs;
 
   function xOf(dateStr: string) {
-    const t = new Date(dateStr).getTime();
-    return PAD.left + ((t - startMs) / totalMs) * chartW;
+    return PAD.left + ((new Date(dateStr).getTime() - startMs) / totalMs) * chartW;
   }
   function yOf(score: number) {
     return PAD.top + chartH - (score / 100) * chartH;
   }
 
-  // Build per-benchmark sorted data points
   const series = useMemo(() => {
     const result: Record<BenchKey, { model: AIModel; value: number }[]> = {
       mmlu: [], gpqa: [], sweBench: [],
@@ -311,7 +417,6 @@ function BenchmarkTrendsChart() {
     return result;
   }, []);
 
-  // Frontier line: running maximum over time per benchmark
   function frontierPath(points: { model: AIModel; value: number }[]) {
     if (points.length === 0) return "";
     let best = 0;
@@ -319,25 +424,20 @@ function BenchmarkTrendsChart() {
     for (const { model, value } of points) {
       const x = xOf(model.releaseDate);
       if (value > best) {
-        if (best > 0) {
-          // horizontal line to this x at old best, then jump up
-          segments.push(`L ${x} ${yOf(best)}`);
-        }
+        if (best > 0) segments.push(`L ${x} ${yOf(best)}`);
         best = value;
         segments.push(`L ${x} ${yOf(best)}`);
       }
     }
-    // extend to right edge
     segments.push(`L ${PAD.left + chartW} ${yOf(best)}`);
     const first = points[0];
     return `M ${xOf(first.model.releaseDate)} ${yOf(first.value)} ${segments.join(" ")}`;
   }
 
-  // Year ticks
   const years = [2023, 2024, 2025, 2026];
 
   function toggleBench(b: BenchKey) {
-    setActiveBenches((prev) => {
+    setActiveBenches(prev => {
       const next = new Set(prev);
       if (next.has(b)) { if (next.size > 1) next.delete(b); }
       else next.add(b);
@@ -353,12 +453,11 @@ function BenchmarkTrendsChart() {
             Benchmark Progress
           </div>
           <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-            Frontier line shows the best-ever score at each point in time — illustrating how fast AI has improved.
+            Frontier line shows the best-ever score at each point in time — illustrating how fast AI capability has advanced.
           </p>
         </div>
-        {/* Legend / toggles */}
         <div className="flex gap-2 flex-wrap">
-          {(Object.keys(BENCHMARK_META) as BenchKey[]).map((b) => {
+          {(Object.keys(BENCHMARK_META) as BenchKey[]).map(b => {
             const { label, color } = BENCHMARK_META[b];
             const active = activeBenches.has(b);
             return (
@@ -380,7 +479,6 @@ function BenchmarkTrendsChart() {
         </div>
       </div>
 
-      {/* SVG Chart */}
       <div className="relative w-full overflow-x-auto">
         <svg
           ref={svgRef}
@@ -389,69 +487,36 @@ function BenchmarkTrendsChart() {
           style={{ minWidth: 320 }}
           onMouseLeave={() => setTooltip(null)}
         >
-          {/* Grid lines */}
-          {[0, 25, 50, 75, 100].map((pct) => (
+          {[0, 25, 50, 75, 100].map(pct => (
             <g key={pct}>
-              <line
-                x1={PAD.left} y1={yOf(pct)}
-                x2={PAD.left + chartW} y2={yOf(pct)}
-                stroke="rgba(255,255,255,0.05)"
-                strokeWidth={1}
-              />
-              <text
-                x={PAD.left - 4} y={yOf(pct) + 3}
-                textAnchor="end"
-                fontSize={9}
-                fill="rgba(255,255,255,0.25)"
-              >
+              <line x1={PAD.left} y1={yOf(pct)} x2={PAD.left + chartW} y2={yOf(pct)}
+                stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+              <text x={PAD.left - 4} y={yOf(pct) + 3} textAnchor="end" fontSize={9} fill="rgba(255,255,255,0.25)">
                 {pct}%
               </text>
             </g>
           ))}
-
-          {/* Year ticks */}
-          {years.map((y) => {
+          {years.map(y => {
             const x = xOf(`${y}-01-01`);
             if (x < PAD.left || x > PAD.left + chartW) return null;
             return (
               <g key={y}>
-                <line
-                  x1={x} y1={PAD.top}
-                  x2={x} y2={PAD.top + chartH}
-                  stroke="rgba(255,255,255,0.06)"
-                  strokeWidth={1}
-                  strokeDasharray="3 3"
-                />
-                <text
-                  x={x} y={H - 8}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fill="rgba(255,255,255,0.3)"
-                >
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + chartH}
+                  stroke="rgba(255,255,255,0.06)" strokeWidth={1} strokeDasharray="3 3" />
+                <text x={x} y={H - 8} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.3)">
                   {y}
                 </text>
               </g>
             );
           })}
-
-          {/* Per-benchmark: frontier line + scatter dots */}
-          {(Object.keys(BENCHMARK_META) as BenchKey[]).map((bench) => {
+          {(Object.keys(BENCHMARK_META) as BenchKey[]).map(bench => {
             if (!activeBenches.has(bench)) return null;
             const { color } = BENCHMARK_META[bench];
             const points = series[bench];
-            const path = frontierPath(points);
             return (
               <g key={bench}>
-                {/* Frontier line */}
-                <path
-                  d={path}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={1.5}
-                  strokeOpacity={0.5}
-                  strokeDasharray="4 2"
-                />
-                {/* Scatter dots */}
+                <path d={frontierPath(points)} fill="none" stroke={color}
+                  strokeWidth={1.5} strokeOpacity={0.5} strokeDasharray="4 2" />
                 {points.map(({ model, value }) => {
                   const cx = xOf(model.releaseDate);
                   const cy = yOf(value);
@@ -459,27 +524,15 @@ function BenchmarkTrendsChart() {
                   return (
                     <circle
                       key={model.id}
-                      cx={cx}
-                      cy={cy}
+                      cx={cx} cy={cy}
                       r={isHovered ? 5 : 3.5}
                       fill={color}
                       fillOpacity={isHovered ? 1 : 0.75}
                       stroke={isHovered ? "#fff" : "rgba(0,0,0,0.4)"}
                       strokeWidth={isHovered ? 1.5 : 1}
                       style={{ cursor: "pointer", transition: "r 0.1s" }}
-                      onMouseEnter={(e) => {
-                        const svg = svgRef.current;
-                        if (!svg) return;
-                        const rect = svg.getBoundingClientRect();
-                        const scaleX = rect.width / W;
-                        const scaleY = rect.height / H;
-                        setTooltip({
-                          x: cx * scaleX + rect.left - (rect.left + rect.width / 2 > window.innerWidth / 2 ? 160 : 0),
-                          y: cy * scaleY + rect.top,
-                          model,
-                          bench,
-                          value,
-                        });
+                      onMouseEnter={e => {
+                        setTooltip({ x: e.clientX, y: e.clientY, model, bench, value });
                       }}
                     />
                   );
@@ -489,16 +542,16 @@ function BenchmarkTrendsChart() {
           })}
         </svg>
 
-        {/* Tooltip (portal-style, positioned relative to viewport) */}
         {tooltip && (
           <div
             className="fixed z-50 pointer-events-none px-2.5 py-2 rounded-lg text-xs shadow-xl border border-white/10 bg-background/95 backdrop-blur-sm"
-            style={{ left: tooltip.x + 12, top: tooltip.y - 40, minWidth: 140 }}
+            style={{
+              left: tooltip.x + 160 > window.innerWidth ? tooltip.x - 152 : tooltip.x + 12,
+              top: tooltip.y - 48,
+              minWidth: 140,
+            }}
           >
-            <div
-              className="font-semibold text-foreground"
-              style={{ color: BENCHMARK_META[tooltip.bench].color }}
-            >
+            <div className="font-semibold" style={{ color: BENCHMARK_META[tooltip.bench].color }}>
               {BENCHMARK_META[tooltip.bench].label}: {tooltip.value}%
             </div>
             <div className="text-muted-foreground mt-0.5">{tooltip.model.name}</div>
@@ -509,16 +562,14 @@ function BenchmarkTrendsChart() {
         )}
       </div>
 
-      {/* Benchmark descriptions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-white/[0.04]">
-        {(Object.keys(BENCHMARK_META) as BenchKey[]).map((b) => {
+        {(Object.keys(BENCHMARK_META) as BenchKey[]).map(b => {
           const { label, color, desc } = BENCHMARK_META[b];
           return (
             <div key={b} className="flex gap-2 items-start">
               <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: color }} />
               <div className="text-[10px] text-muted-foreground">
-                <span className="font-medium" style={{ color }}>{label}</span>
-                {" — "}{desc}
+                <span className="font-medium" style={{ color }}>{label}</span>{" — "}{desc}
               </div>
             </div>
           );
@@ -537,11 +588,11 @@ export interface ModelsTabProps {
 
 export default function ModelsTab({ highlightModelId, onHighlightClear }: ModelsTabProps) {
   const [typeFilter, setTypeFilter] = useState<"all" | ModelType>("all");
-  const [activeTag, setActiveTag] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [mounted, setMounted] = useState(false);
+  const [activeTag, setActiveTag]   = useState<string | null>(null);
+  const [search, setSearch]         = useState("");
+  const [mounted, setMounted]       = useState(false);
   const [timelineValue, setTimelineValue] = useState(100);
-  const [groupByCompany, setGroupByCompany] = useState(false);
+  const [viewMode, setViewMode]     = useState<"columns" | "grid">("columns");
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -552,7 +603,10 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
   }, [highlightModelId, onHighlightClear]);
 
   const startMs = TIMELINE_START.getTime();
-  const endMs = useMemo(() => mounted ? Date.now() : new Date("2026-04-06").getTime(), [mounted]);
+  const endMs = useMemo(
+    () => (mounted ? Date.now() : new Date("2026-04-07").getTime()),
+    [mounted]
+  );
   const totalMs = endMs - startMs;
 
   const timelineDate = useMemo(() => {
@@ -560,18 +614,21 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
     return new Date(startMs + (timelineValue / 100) * totalMs);
   }, [timelineValue, mounted, startMs, totalMs]);
 
-  const filtered = useMemo(() => {
-    return AI_MODELS.filter((m) => {
-      if (typeFilter !== "all" && m.type !== typeFilter) return false;
-      if (activeTag && !m.tags.includes(activeTag)) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        if (!m.name.toLowerCase().includes(q) && !m.provider.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
-  }, [typeFilter, activeTag, search]);
+  const filtered = useMemo(
+    () =>
+      AI_MODELS.filter(m => {
+        if (typeFilter !== "all" && m.type !== typeFilter) return false;
+        if (activeTag && !m.tags.includes(activeTag)) return false;
+        if (search) {
+          const q = search.toLowerCase();
+          if (!m.name.toLowerCase().includes(q) && !m.provider.toLowerCase().includes(q)) return false;
+        }
+        return true;
+      }),
+    [typeFilter, activeTag, search]
+  );
 
+  // Sorted company groups for both column and grid-group views
   const groupedModels = useMemo(() => {
     const map = new Map<string, { color: string; models: AIModel[] }>();
     for (const m of filtered) {
@@ -588,7 +645,6 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
   }, [filtered]);
 
   const years = [2023, 2024, 2025, 2026];
-
   function yearToPercent(year: number) {
     return ((new Date(`${year}-01-01`).getTime() - startMs) / totalMs) * 100;
   }
@@ -599,7 +655,8 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
       <div>
         <h2 className="text-lg font-semibold text-foreground">AI Model Comparison</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Frontier and open-source models ranked by benchmarks, cost, and capability. Updated {MODELS_LAST_UPDATED}.
+          Frontier and open-source models — compare by company, benchmark, cost, and context window.
+          Updated {MODELS_LAST_UPDATED}.
         </p>
       </div>
 
@@ -609,7 +666,8 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
       {/* Controls */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {(["all", "frontier", "open-source"] as const).map((t) => (
+          {/* Type filter */}
+          {(["all", "frontier", "open-source"] as const).map(t => (
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
@@ -623,46 +681,56 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
             </button>
           ))}
 
+          {/* View mode toggle */}
           <div className="flex items-center rounded-lg bg-white/5 p-0.5 ml-1">
             <button
-              onClick={() => setGroupByCompany(false)}
+              onClick={() => setViewMode("columns")}
+              title="Company columns"
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all ${
+                viewMode === "columns"
+                  ? "bg-white/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Building2 size={12} />
+              <span className="hidden sm:inline">Columns</span>
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
               title="Grid view"
               className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all ${
-                !groupByCompany ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+                viewMode === "grid"
+                  ? "bg-white/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <LayoutGrid size={12} />
               <span className="hidden sm:inline">Grid</span>
             </button>
-            <button
-              onClick={() => setGroupByCompany(true)}
-              title="Group by company"
-              className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all ${
-                groupByCompany ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Building2 size={12} />
-              <span className="hidden sm:inline">By Company</span>
-            </button>
           </div>
 
+          {/* Search */}
           <div className="relative ml-auto">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               placeholder="Search models..."
               className="bg-white/5 border border-white/10 rounded-lg pl-8 pr-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/40 w-44"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
                 <X size={12} />
               </button>
             )}
           </div>
         </div>
 
+        {/* Quick filters */}
         <div className="flex flex-wrap gap-1.5">
           <span className="text-xs text-muted-foreground self-center mr-1">Quick filter:</span>
           {QUICK_FILTERS.map(({ label, tag }) => (
@@ -681,43 +749,90 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
         </div>
       </div>
 
-      {/* Model content */}
+      {/* ── Model content ── */}
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">No models match the current filters.</div>
-      ) : groupByCompany ? (
-        <div className="space-y-3">
-          {groupedModels.map(([provider, { color, models }]) => (
-            <ProviderSection
-              key={provider}
-              provider={provider}
-              color={color}
-              models={models}
-              highlightModelId={highlightModelId}
-              timelineDate={timelineDate}
-              mounted={mounted}
-            />
-          ))}
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          No models match the current filters.
         </div>
+      ) : viewMode === "columns" ? (
+        /* ── Columns view ── */
+        <motion.div
+          key="columns"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          {/* Legend */}
+          <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-muted-foreground/60">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-accent/15 text-accent">F</span>
+                Frontier (paid API)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400">OS</span>
+                Open Source
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              {Object.entries(MODALITY_COLORS).map(([name, color]) => (
+                <span key={name} className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                  {name}
+                </span>
+              ))}
+            </div>
+            <span className="hidden sm:inline text-muted-foreground/40">·</span>
+            <span><span className="text-foreground/50 font-medium">128K / 1M</span> = context window</span>
+            <span><span className="text-foreground/50 font-medium">$x/M</span> = price per 1M input tokens</span>
+            <span className="ml-auto text-muted-foreground/40 sm:inline hidden">scroll right for more →</span>
+          </div>
+          <div className="overflow-x-auto -mx-4 px-4 pb-2">
+            <div className="flex gap-6 min-w-max pb-4">
+              {groupedModels.map(([provider, { color, models: companyModels }]) => (
+                <CompanyColumn
+                  key={provider}
+                  provider={provider}
+                  color={color}
+                  models={companyModels}
+                  highlightModelId={highlightModelId}
+                  timelineDate={timelineDate}
+                  mounted={mounted}
+                />
+              ))}
+            </div>
+          </div>
+        </motion.div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((model) => (
-            <motion.div
-              key={model.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ModelCard
-                model={model}
-                highlighted={highlightModelId === model.id}
-                faded={mounted && new Date(model.releaseDate) > timelineDate}
-              />
-            </motion.div>
-          ))}
-        </div>
+        /* ── Grid view ── */
+        <motion.div
+          key="grid"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered
+              .sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime())
+              .map(model => (
+                <motion.div
+                  key={model.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ModelCard
+                    model={model}
+                    highlighted={highlightModelId === model.id}
+                    faded={mounted && new Date(model.releaseDate) > timelineDate}
+                  />
+                </motion.div>
+              ))}
+          </div>
+        </motion.div>
       )}
 
-      {/* Timeline slider */}
+      {/* ── Timeline slider ── */}
       <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -735,7 +850,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
 
         <div className="relative pt-2 pb-5">
           <div className="relative h-4 mb-2">
-            {years.map((y) => {
+            {years.map(y => {
               const pct = yearToPercent(y);
               if (pct < 0 || pct > 100) return null;
               return (
@@ -752,7 +867,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
 
           <div className="relative h-2 bg-white/5 rounded-full mb-2">
             <div className="absolute h-full bg-accent/30 rounded-full" style={{ width: `${timelineValue}%` }} />
-            {AI_MODELS.filter(m => new Date(m.releaseDate) >= TIMELINE_START).map((m) => {
+            {AI_MODELS.filter(m => new Date(m.releaseDate) >= TIMELINE_START).map(m => {
               const pct = ((new Date(m.releaseDate).getTime() - startMs) / totalMs) * 100;
               if (pct < 0 || pct > 100) return null;
               const color = m.type === "frontier" ? "#3b82f6" : "#22c55e";
@@ -773,7 +888,7 @@ export default function ModelsTab({ highlightModelId, onHighlightClear }: Models
             min={0}
             max={100}
             value={timelineValue}
-            onChange={(e) => setTimelineValue(Number(e.target.value))}
+            onChange={e => setTimelineValue(Number(e.target.value))}
             className="w-full accent-accent"
             style={{ margin: 0 }}
           />

@@ -68,9 +68,9 @@ const sections: ShowcaseSection[] = [
   {
     id: "space",
     title: "Space",
-    subtitle: "Launch Tracker & Satellites",
+    subtitle: "Launch Tracker & Space Map",
     description:
-      "Upcoming launches with live countdowns, past mission history broken down by provider, vehicle, orbit, and outcome, a full rocket database — plus a 3D satellite constellation visualizer with real-time orbital propagation and time-lapse controls.",
+      "Upcoming launches with live countdowns, past mission history broken down by provider, vehicle, orbit, and outcome, a full rocket database — and a space map visualizing earth up to deep space and all man made objects in the universe.",
     href: "/space",
     icon: <Rocket size={20} />,
     accentColor: "from-violet-500/20 to-blue-500/10",
@@ -137,9 +137,6 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.25, 0.4, 0.25, 1] }}
           >
-            <p className="mb-4 font-mono text-sm tracking-widest text-accent uppercase">
-              Strategy &middot; Space &middot; Technology
-            </p>
             <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
               Leo Harling
             </h1>

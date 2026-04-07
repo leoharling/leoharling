@@ -7,6 +7,7 @@ const footerLinks = [
   { href: "/intel", label: "Intel" },
   { href: "/space", label: "Space" },
   { href: "/geopolitics", label: "Geopolitics" },
+  { href: "/ai", label: "AI" },
   { href: "/projects", label: "Projects" },
   { href: "/contact", label: "Contact" },
 ];

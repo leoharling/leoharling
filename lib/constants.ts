@@ -28,9 +28,9 @@ export const NAV_LINKS: NavLink[] = [
     href: "#",
     label: "More",
     children: [
-      { href: "/about", label: "About" },
-      { href: "/projects", label: "Projects" },
       { href: "/ai", label: "AI" },
+      { href: "/projects", label: "Projects" },
+      { href: "/about", label: "About" },
       { href: "/contact", label: "Contact" },
     ],
   },
