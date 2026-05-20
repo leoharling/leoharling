@@ -101,6 +101,7 @@ const projects = [
     external: false,
     accent: "text-blue-400",
     iconBg: "bg-blue-500/10 text-blue-400",
+    disabled: true,
   },
   {
     title: "SiKo Tool",
@@ -111,6 +112,7 @@ const projects = [
     external: false,
     accent: "text-violet-400",
     iconBg: "bg-violet-500/10 text-violet-400",
+    disabled: true,
   },
   {
     title: "TrippyPlans",
@@ -121,6 +123,7 @@ const projects = [
     external: true,
     accent: "text-emerald-400",
     iconBg: "bg-emerald-500/10 text-emerald-400",
+    disabled: false,
   },
 ];
 
@@ -289,6 +292,29 @@ export default function Home() {
 
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project, i) => {
+              if (project.disabled) {
+                return (
+                  <FadeIn key={project.title} delay={i * 0.1}>
+                    <div
+                      aria-disabled="true"
+                      className="glass-card flex h-full flex-col p-6 opacity-50 cursor-not-allowed select-none"
+                    >
+                      <div className="mb-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.04] text-muted">
+                          {project.icon}
+                        </div>
+                      </div>
+                      <h3 className="text-base font-semibold text-muted">
+                        Project
+                      </h3>
+                      <p className="mt-0.5 text-sm font-medium text-muted">
+                        Currently Unavailable
+                      </p>
+                    </div>
+                  </FadeIn>
+                );
+              }
+
               const inner = (
                 <>
                   <div className="mb-4">

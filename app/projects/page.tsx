@@ -23,6 +23,7 @@ const projects = [
     tags: ["Python", "Supply Chain", "Aerospace-X"],
     accent: "from-blue-500/15 to-cyan-500/5",
     accentColor: "blue",
+    disabled: true,
   },
   {
     title: "SiKo Tool",
@@ -35,6 +36,7 @@ const projects = [
     tags: ["Next.js", "BSI 200-2", "Public Sector"],
     accent: "from-violet-500/15 to-purple-500/5",
     accentColor: "violet",
+    disabled: true,
   },
   {
     title: "TrippyPlans",
@@ -47,6 +49,7 @@ const projects = [
     tags: ["Next.js", "Supabase", "Real-time"],
     accent: "from-emerald-500/15 to-teal-500/5",
     accentColor: "emerald",
+    disabled: false,
   },
 ];
 
@@ -76,6 +79,43 @@ export default function ProjectsPage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project, i) => {
+              if (project.disabled) {
+                return (
+                  <motion.div
+                    key={project.title}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1, duration: 0.5 }}
+                    aria-disabled="true"
+                    className="relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] backdrop-blur-sm opacity-50 cursor-not-allowed select-none"
+                  >
+                    <div className="flex flex-1 flex-col p-6">
+                      <div className="mb-4">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.04] text-muted">
+                          {project.icon}
+                        </div>
+                      </div>
+
+                      <h2 className="mb-1 text-xl font-bold tracking-tight text-muted">
+                        Project
+                      </h2>
+                      <p className="mb-3 text-sm font-medium text-muted">
+                        Currently Unavailable
+                      </p>
+
+                      <div className="flex-1" />
+
+                      <span
+                        className="inline-flex items-center gap-2 self-start rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-2 text-sm font-medium text-muted"
+                      >
+                        Unavailable
+                      </span>
+                    </div>
+                  </motion.div>
+                );
+              }
+
               const a = accentStyles[project.accentColor as keyof typeof accentStyles];
               return (
                 <motion.div
